@@ -1,0 +1,1 @@
+/usr/bin/c++       CMakeFiles/openMVG_sample_siftPutative.dir/siftmatch.o  -o openMVG_sample_siftPutative -rdynamic -lopenMVG_image -lvlsift -lstlplus -lflann_cpp_s 

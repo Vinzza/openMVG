@@ -1,0 +1,32 @@
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/vidal/Documents/openMVG/src/openMVG_Samples/siftPutativeMatches/siftmatch.cpp
+openMVG/image/image.hpp
+/home/vidal/Documents/openMVG/src/openMVG_Samples/siftPutativeMatches/openMVG/image/image.hpp
+openMVG/features/features.hpp
+/home/vidal/Documents/openMVG/src/openMVG_Samples/siftPutativeMatches/openMVG/features/features.hpp
+openMVG/matching/matcher_brute_force.hpp
+/home/vidal/Documents/openMVG/src/openMVG_Samples/siftPutativeMatches/openMVG/matching/matcher_brute_force.hpp
+openMVG/matching/matcher_kdtree_flann.hpp
+/home/vidal/Documents/openMVG/src/openMVG_Samples/siftPutativeMatches/openMVG/matching/matcher_kdtree_flann.hpp
+openMVG/matching/matching_filters.hpp
+/home/vidal/Documents/openMVG/src/openMVG_Samples/siftPutativeMatches/openMVG/matching/matching_filters.hpp
+openMVG_Samples/siftPutativeMatches/two_view_matches.hpp
+/home/vidal/Documents/openMVG/src/openMVG_Samples/siftPutativeMatches/openMVG_Samples/siftPutativeMatches/two_view_matches.hpp
+nonFree/sift/SIFT.hpp
+/home/vidal/Documents/openMVG/src/openMVG_Samples/siftPutativeMatches/nonFree/sift/SIFT.hpp
+third_party/stlplus3/filesystemSimplified/file_system.hpp
+/home/vidal/Documents/openMVG/src/openMVG_Samples/siftPutativeMatches/third_party/stlplus3/filesystemSimplified/file_system.hpp
+third_party/vectorGraphics/svgDrawer.hpp
+/home/vidal/Documents/openMVG/src/openMVG_Samples/siftPutativeMatches/third_party/vectorGraphics/svgDrawer.hpp
+string
+-
+iostream
+-
+

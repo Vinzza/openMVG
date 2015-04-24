@@ -6,6 +6,9 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include "openMVG/sfm/pipelines/global/GlobalSfM_translation_averaging.hpp"
+#include "openMVG/sfm/sfm_filters.hpp"
+#include "openMVG/sfm/pipelines/global/sfm_global_reindex.hpp"
+#include "openMVG/sfm/pipelines/global/mutexSet.hpp"
 #include "openMVG/multiview/translation_averaging_common.hpp"
 #include "openMVG/multiview/translation_averaging_solver.hpp"
 #include "openMVG/graph/graph.hpp"
@@ -304,7 +307,7 @@ void GlobalSfM_Translation_AveragingSolver::ComputePutativeTranslation_EdgesCove
   const Features_Provider * normalized_features_provider,
   const matching::PairWiseMatches & map_Matches_E,
   const std::vector< graphUtils::Triplet > & vec_triplets,
-  std::vector<openMVG::relativeInfo > & vec_initialEstimates,
+  RelativeInfo_Vec & vec_initialEstimates,
   matching::PairWiseMatches & newpairMatches)
 {
   //-- Prepare tracks count per triplets:
@@ -551,6 +554,10 @@ void GlobalSfM_Translation_AveragingSolver::ComputePutativeTranslation_EdgesCove
               iterI = iterJ = iterK = subTrack.begin();
               std::advance(iterJ,1);
               std::advance(iterK,2);
+              /*openMVG::tracks::submapTrack::const_iterator
+                iterI = subTrack.find(I),
+                iterJ = subTrack.find(J),
+                iterK = subTrack.find(K);*/
 
               newpairMatches[std::make_pair(I,J)].push_back(IndMatch(iterI->second, iterJ->second));
               newpairMatches[std::make_pair(J,K)].push_back(IndMatch(iterJ->second, iterK->second));
