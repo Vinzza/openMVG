@@ -27,6 +27,9 @@
 namespace openMVG{
 namespace globalSfM{
 
+////////////////////////////////////////////////////////////////////////////////
+//                                    Run                                     //
+////////////////////////////////////////////////////////////////////////////////
 /// Use features in normalized camera frames
 bool GlobalSfM_Translation_AveragingSolver::Run(
   ETranslationAveragingMethod eTranslationAveragingMethod,
@@ -66,6 +69,10 @@ bool GlobalSfM_Translation_AveragingSolver::Run(
     map_Matches_Ecpy,
     map_globalR);
 }
+
+////////////////////////////////////////////////////////////////////////////////
+//                           Translation Averaging                            //
+////////////////////////////////////////////////////////////////////////////////
 
 bool GlobalSfM_Translation_AveragingSolver::Translation_averaging(
   ETranslationAveragingMethod eTranslationAveragingMethod,
@@ -240,6 +247,10 @@ bool GlobalSfM_Translation_AveragingSolver::Translation_averaging(
   return true;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+//                            Compute Translations                            //
+////////////////////////////////////////////////////////////////////////////////
+
 void GlobalSfM_Translation_AveragingSolver::Compute_translations(
   const SfM_Data & sfm_data,
   const Features_Provider * normalized_features_provider,
@@ -280,6 +291,10 @@ void GlobalSfM_Translation_AveragingSolver::Compute_translations(
       << "-- timing to obtain the relative translations: " << timeLP_triplet << " seconds.\n"
       << "-------------------------------" << std::endl;
 }
+
+////////////////////////////////////////////////////////////////////////////////
+//                Compute Putative Translation Edges Coverage                 //
+////////////////////////////////////////////////////////////////////////////////
 
 //-- Perform a trifocal estimation of the graph contain in vec_triplets with an
 // edge coverage algorithm. It's complexity is sub-linear in term of edges count.
@@ -552,6 +567,10 @@ void GlobalSfM_Translation_AveragingSolver::ComputePutativeTranslation_EdgesCove
     }
   }
 }
+
+////////////////////////////////////////////////////////////////////////////////
+//                             Estimate T Triplet                             //
+////////////////////////////////////////////////////////////////////////////////
 
 // Robust estimation and refinement of a translation and 3D points of an image triplets.
 bool GlobalSfM_Translation_AveragingSolver::Estimate_T_triplet(

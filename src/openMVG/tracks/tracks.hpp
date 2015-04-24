@@ -49,6 +49,7 @@ namespace openMVG  {
 
 using namespace openMVG::matching;
 
+////////////////////////////////////////////////////////////////////////////////
 /// Lightweight copy of the flat_map of BOOST library
 /// Use a vector to speed up insertion (preallocated array)
 template<typename T1, typename T2>
@@ -77,6 +78,9 @@ private:
   static bool superiorToFirst(const P &a, const T1 &b) {return a.first<b;}
 };
 
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
 namespace tracks  {
   using namespace std;
 
@@ -85,6 +89,10 @@ namespace tracks  {
 typedef std::map<size_t,size_t> submapTrack;
 // A track is a collection of {trackId, submapTrack}
 typedef std::map< size_t, submapTrack > STLMAPTracks;
+
+////////////////////////////////////////////////////////////////////////////////
+//                               Tracks Builder                               //
+////////////////////////////////////////////////////////////////////////////////
 
 struct TracksBuilder
 {
@@ -103,6 +111,9 @@ struct TracksBuilder
   const UnionFindObject & getUnionFindEnum() const {return *myTracksUF; }
   const MapNodeIndex & getReverseMap() const {return reverse_my_Map;}
 
+  ///------- -- -- -  -                                    -  - -- -- -------///
+  //--- -- -  -               Tracks Builder - Build               -  - -- ---//
+  ///------- -- -- -  -                                    -  - -- -- -------///
   /// Build tracks for a given series of pairWise matches
   bool Build( const PairWiseMatches &  map_pair_wise_matches)
   {
@@ -193,6 +204,9 @@ struct TracksBuilder
     return false;
   }
 
+  ///------- -- -- -  -                                    -  - -- -- -------///
+  //--- -- -  -  Tracks Builder - Filter PairWise Minimum Matches  -  - -- ---//
+  ///------- -- -- -  -                                    -  - -- -- -------///
   /// Remove the pair that have too few correspondences.
   bool FilterPairWiseMinimumMatches(size_t minMatchesOccurences, bool bVerbose = false)
   {
@@ -237,7 +251,10 @@ struct TracksBuilder
       std::bind1st(std::mem_fun(&UnionFindObject::eraseClass), myTracksUF.get()));
     return false;
   }
-
+  
+  ///------- -- -- -  -                                    -  - -- -- -------///
+  //--- -- -  -                Tracks Builder - ...                -  - -- ---//
+  ///------- -- -- -  -                                    -  - -- -- -------///
   bool ExportToStream(ostream & os)
   {
     size_t cpt = 0;
@@ -256,6 +273,7 @@ struct TracksBuilder
     return os.good();
   }
 
+  ///------- -- -- -  -                                    -  - -- -- -------///
   /// Return the number of connected set in the UnionFind structure (tree forest)
   size_t NbTracks() const
   {
@@ -265,6 +283,7 @@ struct TracksBuilder
     return cpt;
   }
 
+  ///------- -- -- -  -                                    -  - -- -- -------///
   /// Export tracks as a map (each entry is a sequence of imageId and featureIndex):
   ///  {TrackIndex => {(imageIndex, featureIndex), ... ,(imageIndex, featureIndex)}
   void ExportToSTL(STLMAPTracks & map_tracks)
@@ -287,6 +306,9 @@ struct TracksBuilder
   }
 };
 
+////////////////////////////////////////////////////////////////////////////////
+//                              Tracks Utils Map                              //
+////////////////////////////////////////////////////////////////////////////////
 struct TracksUtilsMap
 {
   /// Return the tracks that are in common to the set_imageIndex indexes.
@@ -317,6 +339,7 @@ struct TracksUtilsMap
     return !map_tracksOut.empty();
   }
 
+  //////////////////////////////////////////////////////////////////////////////
   /// Return the tracksId as a set (sorted increasing)
   static void GetTracksIdVector(
     const STLMAPTracks & map_tracks,
@@ -330,6 +353,7 @@ struct TracksUtilsMap
     }
   }
 
+  //////////////////////////////////////////////////////////////////////////////
   /// Get feature index PerView and TrackId
   static bool GetFeatIndexPerViewAndTrackId(
     const STLMAPTracks & map_tracks,
@@ -355,6 +379,7 @@ struct TracksUtilsMap
     return !pvec_featIndex->empty();
   }
 
+  //////////////////////////////////////////////////////////////////////////////
   struct FunctorMapFirstEqual : public std::unary_function <std::map<size_t, std::map<size_t,size_t> >, bool>
   {
     size_t id;
@@ -364,6 +389,7 @@ struct TracksUtilsMap
     }
   };
 
+  //////////////////////////////////////////////////////////////////////////////
   /// Convert a trackId to a vector of indexed Matches.
   /// The input tracks must be compound of only two images index.
   /// Be careful image index are sorted (increasing order)
@@ -388,6 +414,7 @@ struct TracksUtilsMap
     }
   }
 
+  //////////////////////////////////////////////////////////////////////////////
   /// Return the occurrence of tracks length.
   static void TracksLength(const STLMAPTracks & map_tracks,
     std::map<size_t, size_t> & map_Occurence_TrackLength)
@@ -408,6 +435,7 @@ struct TracksUtilsMap
     }
   }
 
+  //////////////////////////////////////////////////////////////////////////////
   /// Return a set containing the image Id considered in the tracks container.
   static void ImageIdInTracks(const STLMAPTracks & map_tracks,
     std::set<size_t> & set_imagesId)

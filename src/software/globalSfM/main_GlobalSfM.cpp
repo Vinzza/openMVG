@@ -30,7 +30,6 @@ int main(int argc, char **argv)
     << "------------------------------------------------------------"
     << std::endl;
 
-
   CmdLine cmd;
 
   std::string sSfM_Data_Filename;

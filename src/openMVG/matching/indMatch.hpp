@@ -18,6 +18,7 @@
 namespace openMVG {
 namespace matching {
 
+////////////////////////////////////////////////////////////////////////////////
 /// Structure in order to save pairwise indexed references.
 /// A sort operator exist in order to remove duplicates of IndMatch series.
 struct IndMatch
@@ -58,19 +59,27 @@ struct IndMatch
   IndexT _i, _j;  // Left, right index
 };
 
+////////////////////////////////////////////////////////////////////////////////
+
 static std::ostream& operator<<(std::ostream & out, const IndMatch & obj) {
   return out << obj._i << " " << obj._j;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+
 static inline std::istream& operator>>(std::istream & in, IndMatch & obj) {
   return in >> obj._i >> obj._j;
 }
+
+////////////////////////////////////////////////////////////////////////////////
 
 typedef std::vector<matching::IndMatch> IndMatches;
 //--
 // Pairwise matches (indexed matches for a pair <I,J>)
 /// The structure used to store corresponding point indexes per images pairs
 typedef std::map< Pair, IndMatches > PairWiseMatches;
+
+////////////////////////////////////////////////////////////////////////////////
 
 static Pair_Set getPairs(const PairWiseMatches & matches)
 {

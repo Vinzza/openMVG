@@ -18,6 +18,10 @@
 
 namespace openMVG{
 
+////////////////////////////////////////////////////////////////////////////////
+//                               CONSTRUCTEURS                                //
+////////////////////////////////////////////////////////////////////////////////
+
 GlobalSfMReconstructionEngine_RelativeMotions::GlobalSfMReconstructionEngine_RelativeMotions(
   const SfM_Data & sfm_data,
   const std::string & soutDirectory,
@@ -42,6 +46,8 @@ GlobalSfMReconstructionEngine_RelativeMotions::GlobalSfMReconstructionEngine_Rel
   _eTranslationAveragingMethod = globalSfM::TRANSLATION_AVERAGING_L1;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+
 GlobalSfMReconstructionEngine_RelativeMotions::~GlobalSfMReconstructionEngine_RelativeMotions()
 {
   if (!_sLoggingFile.empty())
@@ -51,6 +57,8 @@ GlobalSfMReconstructionEngine_RelativeMotions::~GlobalSfMReconstructionEngine_Re
     htmlFileStream << _htmlDocStream->getDoc();
   }
 }
+
+////////////////////////////////////////////////////////////////////////////////
 
 void GlobalSfMReconstructionEngine_RelativeMotions::SetFeaturesProvider(Features_Provider * provider)
 {
@@ -74,10 +82,16 @@ void GlobalSfMReconstructionEngine_RelativeMotions::SetFeaturesProvider(Features
   }
 }
 
+////////////////////////////////////////////////////////////////////////////////
+
 void GlobalSfMReconstructionEngine_RelativeMotions::SetMatchesProvider(Matches_Provider * provider)
 {
   _matches_provider = provider;
 }
+
+////////////////////////////////////////////////////////////////////////////////
+//                                  PROCESS                                   //
+////////////////////////////////////////////////////////////////////////////////
 
 bool GlobalSfMReconstructionEngine_RelativeMotions::Process() {
 
@@ -140,6 +154,10 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Process() {
   return true;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+//                              GLOBAL ROTATION                               //
+////////////////////////////////////////////////////////////////////////////////
+
 /// Compute from relative rotations the global rotations of the camera poses
 bool GlobalSfMReconstructionEngine_RelativeMotions::Compute_Global_Rotations()
 {
@@ -166,7 +184,7 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Compute_Global_Rotations()
     // Setup input relative rotation data for global rotation computation
     vec_relativeRotEstimate.reserve(_relatives_Rt.size());
     for(RelativeInfo_Map::const_iterator iter = _relatives_Rt.begin();
-      iter != _relatives_Rt.end(); ++iter)
+	iter != _relatives_Rt.end(); ++iter)
     {
       const openMVG::relativeInfo & rel = *iter;
       PairWiseMatches::const_iterator iterMatches = map_matches.find(rel.first); // If the pair support some matches
@@ -224,6 +242,10 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Compute_Global_Rotations()
   return bRotationAveraging;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+//                             GLOBAL TRANSLATION                             //
+////////////////////////////////////////////////////////////////////////////////
+
 /// Compute/refine relative translations and compute global translations
 bool GlobalSfMReconstructionEngine_RelativeMotions::Compute_Global_Translations()
 {
@@ -246,6 +268,10 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Compute_Global_Translations(
 
   return bTranslationAveraging;
 }
+
+////////////////////////////////////////////////////////////////////////////////
+//                             INITIAL STRUCTURE                              //
+////////////////////////////////////////////////////////////////////////////////
 
 /// Compute the initial structure of the scene
 bool GlobalSfMReconstructionEngine_RelativeMotions::Compute_Initial_Structure()
@@ -332,6 +358,10 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Compute_Initial_Structure()
   return !_sfm_data.structure.empty();
 }
 
+////////////////////////////////////////////////////////////////////////////////
+//                                   ADJUST                                   //
+////////////////////////////////////////////////////////////////////////////////
+
 // Adjust the scene (& remove outliers)
 bool GlobalSfMReconstructionEngine_RelativeMotions::Adjust()
 {
@@ -410,6 +440,11 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Adjust()
 
   return b_BA_Status;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////
+//                             RELATIVE ROTATIONS                             //
+////////////////////////////////////////////////////////////////////////////////
 
 void GlobalSfMReconstructionEngine_RelativeMotions::Compute_Relative_Rotations(RelativeInfo_Map & vec_relatives)
 {
