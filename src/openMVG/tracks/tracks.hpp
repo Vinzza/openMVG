@@ -179,6 +179,9 @@ struct TracksBuilder
     return false;
   }
 
+  ///------- -- -- -  -                                    -  - -- -- -------///
+  //--- -- -  -              Tracks Builder - Filter               -  - -- ---//
+  ///------- -- -- -  -                                    -  - -- -- -------///
   /// Remove bad tracks, conflict tracks (many times the same image index in a track)
   bool Filter(size_t nLengthSupTo = 2)
   {

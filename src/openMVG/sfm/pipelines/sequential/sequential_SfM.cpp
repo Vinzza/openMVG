@@ -25,6 +25,9 @@
 
 namespace openMVG{
 
+////////////////////////////////////////////////////////////////////////////////
+//                   SEQUENTIALS SfM RECONSTRUCTION ENGINE                    //
+////////////////////////////////////////////////////////////////////////////////
 SequentialSfMReconstructionEngine::SequentialSfMReconstructionEngine(
   const SfM_Data & sfm_data,
   const std::string & soutDirectory,
@@ -64,6 +67,9 @@ SequentialSfMReconstructionEngine::~SequentialSfMReconstructionEngine()
   }
 }
 
+////////////////////////////////////////////////////////////////////////////////
+//                       SET FEATURES/MATCHES PROVIDER                        //
+////////////////////////////////////////////////////////////////////////////////
 void SequentialSfMReconstructionEngine::SetFeaturesProvider(Features_Provider * provider)
 {
   _features_provider = provider;
@@ -74,6 +80,9 @@ void SequentialSfMReconstructionEngine::SetMatchesProvider(Matches_Provider * pr
   _matches_provider = provider;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+//                                  PROCESS                                   //
+////////////////////////////////////////////////////////////////////////////////
 bool SequentialSfMReconstructionEngine::Process() {
 
   //-------------------
@@ -162,6 +171,9 @@ bool SequentialSfMReconstructionEngine::Process() {
   return true;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+//                            CHOOSE INITIAL PAIR                             //
+////////////////////////////////////////////////////////////////////////////////
 /// Select a candidate initial pair
 bool SequentialSfMReconstructionEngine::ChooseInitialPair(Pair & initialPairIndex) const
 {
@@ -243,6 +255,9 @@ bool SequentialSfMReconstructionEngine::ChooseInitialPair(Pair & initialPairInde
   return true;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+//                            INIT LANDMARK TRACKS                            //
+////////////////////////////////////////////////////////////////////////////////
 bool SequentialSfMReconstructionEngine::InitLandmarkTracks()
 {
   // Compute tracks from matches
@@ -291,6 +306,7 @@ bool SequentialSfMReconstructionEngine::InitLandmarkTracks()
   return _map_tracks.size() > 0;
 }
 
+////////////////////////////////////////////////////////////////////////////////
 /// Export point feature based vector to a matrix [(x,y)'T, (x,y)'T]
 /// Use the camera intrinsics in order to get undistorted pixel coordinates
 template< typename FeaturesT, typename MatT >
@@ -313,6 +329,9 @@ static void PointsToMat(
   }
 }
 
+////////////////////////////////////////////////////////////////////////////////
+//                            MAKE INITIAL PAIR 3D                            //
+////////////////////////////////////////////////////////////////////////////////
 /// Compute the initial 3D seed (First camera t=0; R=Id, second estimated by 5 point algorithm)
 bool SequentialSfMReconstructionEngine::MakeInitialPair3D(const Pair & current_pair)
 {
@@ -537,6 +556,9 @@ bool SequentialSfMReconstructionEngine::MakeInitialPair3D(const Pair & current_p
   }
 }
 
+////////////////////////////////////////////////////////////////////////////////
+//                        COMPUTE RESIDUALS HISTOGRAM                         //
+////////////////////////////////////////////////////////////////////////////////
 double SequentialSfMReconstructionEngine::ComputeResidualsHistogram(Histogram<double> * histo)
 {
   // Collect residuals for each observation
@@ -582,6 +604,7 @@ double SequentialSfMReconstructionEngine::ComputeResidualsHistogram(Histogram<do
   return -1.0;
 }
 
+////////////////////////////////////////////////////////////////////////////////
 /// Functor to sort a vector of pair given the pair's second value
 template<class T1, class T2, class Pred = std::less<T2> >
 struct sort_pair_second {
@@ -593,6 +616,9 @@ struct sort_pair_second {
   }
 };
 
+////////////////////////////////////////////////////////////////////////////////
+//                    FIND IMAGES WITH POSSIBLE RESECTION                     //
+////////////////////////////////////////////////////////////////////////////////
 /// List the images that the greatest number of matches to the current 3D reconstruction.
 bool SequentialSfMReconstructionEngine::FindImagesWithPossibleResection
 (
@@ -672,6 +698,9 @@ bool SequentialSfMReconstructionEngine::FindImagesWithPossibleResection
   }
 }
 
+////////////////////////////////////////////////////////////////////////////////
+//                                 RESECTION                                  //
+////////////////////////////////////////////////////////////////////////////////
 /// Add to the current scene the desired image indexes.
 bool SequentialSfMReconstructionEngine::Resection
 (
@@ -693,6 +722,7 @@ bool SequentialSfMReconstructionEngine::Resection
   return bOk;
 }
 
+////////////////////////////////////////////////////////////////////////////////
 /// Add a single Image to the scene and triangulate new possible tracks
 bool SequentialSfMReconstructionEngine::Resection(size_t viewIndex)
 {
@@ -1036,6 +1066,9 @@ bool SequentialSfMReconstructionEngine::Resection(size_t viewIndex)
   return true;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+//                             BUNDLE ADJUSTMENT                              //
+////////////////////////////////////////////////////////////////////////////////
 /// Bundle adjustment to refine Structure; Motion and Intrinsics
 void SequentialSfMReconstructionEngine::BundleAdjustment()
 {
@@ -1053,6 +1086,9 @@ void SequentialSfMReconstructionEngine::BundleAdjustment()
   bool bOk = bundle_adjustment_obj.Adjust(_sfm_data, true, true, !_bFixedIntrinsics);
 }
 
+////////////////////////////////////////////////////////////////////////////////
+//                             BAD TRACK REJECTOR                             //
+////////////////////////////////////////////////////////////////////////////////
 /// Discard track with too large residual error
 size_t SequentialSfMReconstructionEngine::badTrackRejector(double dPrecision)
 {

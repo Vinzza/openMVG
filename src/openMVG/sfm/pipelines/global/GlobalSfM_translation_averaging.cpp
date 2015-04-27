@@ -111,6 +111,9 @@ bool GlobalSfM_Translation_AveragingSolver::Translation_averaging(
 
     switch(eTranslationAveragingMethod)
     {
+      ///------- -- -- -  -                                -  - -- -- -------///
+      //--- -- -  -            Translation averaging L1            -  - -- ---//
+      ///------- -- -- -  -                                -  - -- -- -------///
       case TRANSLATION_AVERAGING_L1:
       {
         double gamma = -1.0;
@@ -190,6 +193,9 @@ bool GlobalSfM_Translation_AveragingSolver::Translation_averaging(
       }
       break;
 
+      ///------- -- -- -  -                                -  - -- -- -------///
+      //--- -- -  -            Translation averaging L2            -  - -- ---//
+      ///------- -- -- -  -                                -  - -- -- -------///
       case TRANSLATION_AVERAGING_L2:
       {
         std::vector<int> vec_edges;

@@ -19,6 +19,9 @@ namespace globalSfM{
 
 using namespace openMVG::rotation_averaging;
 
+////////////////////////////////////////////////////////////////////////////////
+//                                    RUN                                     //
+////////////////////////////////////////////////////////////////////////////////
 bool GlobalSfM_Rotation_AveragingSolver::Run(
   ERotationAveragingMethod eRotationAveragingMethod,
   ERelativeRotationInferenceMethod eRelativeRotationInferenceMethod,
@@ -30,6 +33,9 @@ bool GlobalSfM_Rotation_AveragingSolver::Run(
   // We will work on a copy, since inference can remove some relative motions
 
   //-> Test there is only one graph and at least 3 camera ?
+  ///------- -- -- -  -                                    -  - -- -- -------///
+  //--- -- -  -           A. Relavite Rotation Inference           -  - -- ---//
+  ///------- -- -- -  -                                    -  - -- -- -------///
   switch(eRelativeRotationInferenceMethod)
   {
     case(TRIPLET_ROTATION_INFERENCE_COMPOSITION_ERROR):
@@ -65,11 +71,14 @@ bool GlobalSfM_Rotation_AveragingSolver::Run(
     rel.j = _reindexForward[rel.j];
   }
 
-  //- B. solve global rotation computation
+  ///------- -- -- -  -                                    -  - -- -- -------///
+  //--- -- -  -        B. Solve Global Rotation Computation        -  - -- ---//
+  ///------- -- -- -  -                                    -  - -- -- -------///
   bool bSuccess = false;
   std::vector<Mat3> vec_globalR(_reindexForward.size());
   switch(eRotationAveragingMethod)
   {
+    ///------- -- -- -  -     -       -      -       -     -  - -- -- -------///
     case ROTATION_AVERAGING_L2:
     {
       //- Solve the global rotation estimation problem:
@@ -84,6 +93,7 @@ bool GlobalSfM_Rotation_AveragingSolver::Run(
           vec_globalR);
     }
     break;
+    ///------- -- -- -  -     -       -      -       -     -  - -- -- -------///
     case ROTATION_AVERAGING_L1:
     {
       using namespace openMVG::rotation_averaging::l1;
@@ -104,6 +114,7 @@ bool GlobalSfM_Rotation_AveragingSolver::Run(
           used_pairs.insert(Pair(relativeRotations[i].i,relativeRotations[i].j));
     }
     break;
+    ///------- -- -- -  -     -       -      -       -     -  - -- -- -------///
     default:
     std::cerr << "Unknown rotation averaging method: " << (int) eRotationAveragingMethod << std::endl;
   }
@@ -122,6 +133,9 @@ bool GlobalSfM_Rotation_AveragingSolver::Run(
   return bSuccess;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+//                         Triplet Rotation Rejection                         //
+////////////////////////////////////////////////////////////////////////////////
 /// Reject edges of the view graph that do not produce triplets with tiny
 ///  angular error once rotation composition have been computed.
 void GlobalSfM_Rotation_AveragingSolver::TripletRotationRejection(
@@ -140,7 +154,7 @@ void GlobalSfM_Rotation_AveragingSolver::TripletRotationRejection(
   std::vector<float> vec_errToIdentityPerTriplet;
   vec_errToIdentityPerTriplet.reserve(vec_triplets.size());
   // Compute for each length 3 cycles: the composition error
-  //  Error to identity rotation.
+  // Error to identity rotation.
   for (size_t i = 0; i < vec_triplets.size(); ++i)
   {
     const graphUtils::Triplet & triplet = vec_triplets[i];
