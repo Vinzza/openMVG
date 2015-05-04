@@ -12,6 +12,7 @@
 
 #include "openMVG/sfm/pipelines/global/GlobalSfM_rotation_averaging.hpp"
 #include "openMVG/sfm/pipelines/global/GlobalSfM_translation_averaging.hpp"
+#include "openMVG/sfm/pipelines/global/GlobalSfM_graph_cleaner.hpp"
 #include "third_party/htmlDoc/htmlDoc.hpp"
 
 namespace openMVG{
@@ -58,6 +59,7 @@ private:
   // HTML logger
   std::shared_ptr<htmlDocument::htmlDocumentStream> _htmlDocStream;
   std::string _sLoggingFile;
+  bool Log_Display_graph( const std::string graph_name, const PairWiseMatches & map_matches );
 
   // Parameter
   globalSfM::ERotationAveragingMethod _eRotationAveragingMethod;

@@ -109,13 +109,21 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Process() {
     KeepOnlyReferencedElement(set_remainingIds, _matches_provider->_pairWise_matches);
   }
 
+  // LOG PRINT
+  Log_Display_graph("InitialGraph",_matches_provider->_pairWise_matches);
+  // LOG PRINT
+  
   Compute_Relative_Rotations(_relatives_Rt);
-
+    
   if (!Compute_Global_Rotations())
   {
     std::cerr << "GlobalSfM:: Rotation Averaging failure!" << std::endl;
     return false;
   }
+  // LOG PRINT
+  Log_Display_graph("cleanedGraph",_matches_provider->_pairWise_matches);
+  // LOG PRINT
+  
   if (!Compute_Global_Translations())
   {
     std::cerr << "GlobalSfM:: Translation Averaging failure!" << std::endl;
@@ -574,6 +582,34 @@ void GlobalSfMReconstructionEngine_RelativeMotions::Compute_Relative_Rotations(R
       //  relativePose_info.relativePose.translation());
     }
   }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+//                             Log Display Graph                              //
+////////////////////////////////////////////////////////////////////////////////
+bool GlobalSfMReconstructionEngine_RelativeMotions::Log_Display_graph( const std::string graph_name, const PairWiseMatches & map_matches ){  
+  if (!_sLoggingFile.empty())
+  {
+    
+    graphUtils::indexedGraph putativeGraph(getPairs(map_matches));
+    
+    if (!_sOutDirectory.empty())
+    {
+      // Save the graph after cleaning:
+      graphUtils::exportToGraphvizData(
+	stlplus::create_filespec(_sOutDirectory, graph_name),
+	putativeGraph.g);
+    }
+
+    using namespace htmlDocument;
+    std::ostringstream os;
+
+    os << "<br>" << graph_name << "<br>";
+    os << "<img src=\"" << graph_name << ".svg\" height=\"600\">\n";
+
+    _htmlDocStream->pushInfo(os.str());
+  }
+  return (!_sLoggingFile.empty());
 }
 
 } // namespace openMVG
