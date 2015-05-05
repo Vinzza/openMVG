@@ -29,7 +29,7 @@ namespace globalSfM{
 ////////////////////////////////////////////////////////////////////////////////
 struct Cycle
 {
-  Cycle(const std::vector<Pair> &  ccycle)
+  Cycle(const std::vector<Pair> & ccycle)
     :cycle(ccycle)
   { }
 
@@ -64,8 +64,8 @@ struct Cycle
   }
   
   ////////// // // /  /    /       /          /       /    /  / // // //////////
-  
-  friend bool operator==(const Cycle& c1, const Cycle& c2)  {
+
+  friend bool operator==(const Cycle& c1, Cycle& c2)  {
     std::vector<Pair> cycle2 = c2.cycle;
     Pair edge0 = c1.cycle[0];
     std::vector<Pair>::iterator p = std::find( cycle2.begin(), cycle2.end(), edge0 );
@@ -81,34 +81,62 @@ struct Cycle
     }
     return false;
   }
-
   
-  friend bool operator!=(const Cycle& c1, const Cycle& c2)  {
+  friend bool operator!=(const Cycle& c1, Cycle& c2)  {
     return !(c1 == c2);
   }
 
   
   friend std::ostream & operator<<(std::ostream & os, const Cycle & c)
   {
+    os << c.cycle[0].first;
     for (int i = 0; i < c.cycle.size(); ++i){
-      os << c.cycle[i] << " ";
+      os << "--" << c.cycle[i].second << " ";
     }
     os << std::endl;
     return os;
   }
   
 }; // Struct Cycle
+
+
+typedef std::vector< Cycle > Cycles;
   
 ////////////////////////////////////////////////////////////////////////////////
 //                          Global SfM Graph Cleaner                          //
 //////////////////////////////////////////////////////////////////////////////// 
 class GlobalSfM_Graph_Cleaner
 {
-  void TripletRotationRejection(
-    const double max_angular_error,
-    std::vector< graphUtils::Triplet > & vec_triplets,
-    rotation_averaging::RelativeRotations & relativeRotations
-  ) const; 
+    
+  private:
+    
+    mutable Cycles vec_cycles;
+    
+    mutable rotation_averaging::RelativeRotations_map map_relatives;
+
+    
+    void addCycleToMap( Cycle & c, rotation_averaging::RelativeRotations_map & map_relatives_new ){
+      for ( std::vector<Pair>::iterator iter = c.cycle.begin(); iter != c.cycle.end(); ++iter ){
+	const Pair ij = *iter;
+	const Pair ji = std::make_pair( ij.second, ij.first );
+	
+	if (map_relatives.find(ij) != map_relatives.end())
+	    map_relatives_new[ij] = map_relatives.at(ij);
+	else
+	    map_relatives_new[ji] = map_relatives.at(ji);
+      }
+    };
+    
+  ////////// // // /  /    /       /          /       /    /  / // // //////////
+
+  public:
+    
+    void FindCycles() const;
+
+    void RotationRejection(const double max_angular_error) const;
+    
+    rotation_averaging::RelativeRotations_map Run() const;
+    
 };
 
 

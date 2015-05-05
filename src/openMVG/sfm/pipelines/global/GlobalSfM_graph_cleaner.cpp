@@ -18,117 +18,106 @@ namespace globalSfM{
   
 using namespace openMVG::rotation_averaging;
 
+////////////////////////////////////////////////////////////////////////////////
+//                                    Run                                     //
+////////////////////////////////////////////////////////////////////////////////
 
+rotation_averaging::RelativeRotations_map GlobalSfM_Graph_Cleaner::Run() const
+{
+
+  FindCycles();
+  RotationRejection(5.0f);
+  
+  return map_relatives;
+
+}
+
+////////////////////////////////////////////////////////////////////////////////
+//                                Find Cycles                                 //
+////////////////////////////////////////////////////////////////////////////////
+
+void GlobalSfM_Graph_Cleaner::FindCycles() const {
+  // vec_cycles
+  // mutable rotation_averaging::RelativeRotations_map       map_relatives;
+
+  Pair_Set pair_set;
+  for(RelativeRotations_map::const_iterator iter = map_relatives.begin(); iter != map_relatives.end(); ++iter)
+      pair_set.insert(iter->first);
+  
+  std::vector<graphUtils::Triplet> vec_triplets = graphUtils::tripletListing(pair_set);
+  
+  vec_cycles.clear();
+  vec_cycles.reserve(vec_triplets.size());
+  
+  for ( std::vector<graphUtils::Triplet>::iterator iter=vec_triplets.begin(); iter!=vec_triplets.end(); ++iter ) {
+    graphUtils::Triplet triplet_i = *iter;    
+    std::vector<Pair> cycle_cst;
+    cycle_cst.push_back( std::make_pair(triplet_i.i, triplet_i.j) );
+    cycle_cst.push_back( std::make_pair(triplet_i.j, triplet_i.k) );
+    cycle_cst.push_back( std::make_pair(triplet_i.k, triplet_i.i) );
+    vec_cycles.push_back(Cycle(cycle_cst));
+  }
+}
   
 ////////////////////////////////////////////////////////////////////////////////
-//                         Triplet Rotation Rejection                         //
+//                             Rotation Rejection                             //
 ////////////////////////////////////////////////////////////////////////////////
-/// Reject edges of the view graph that do not produce triplets with tiny
+///  Reject edges of the view graph that do not produce triplets with tiny
 ///  angular error once rotation composition have been computed.
-void GlobalSfM_Graph_Cleaner::TripletRotationRejection(
-  const double max_angular_error,
-  std::vector< graphUtils::Triplet > & vec_triplets,
-  RelativeRotations & relativeRotations) const
+void GlobalSfM_Graph_Cleaner::RotationRejection(const double max_angular_error) const
 {
-  const size_t edges_start_count = relativeRotations.size();
-
-  RelativeRotations_map map_relatives = getMap(relativeRotations);
+//  mutable Cycles cycle_vec;
+//  mutable rotation_averaging::RelativeRotations_map map_relatives;
+  
+  const size_t edges_start_count = map_relatives.size();  
   RelativeRotations_map map_relatives_validated;
 
-  // DETECTION OF ROTATION OUTLIERS
-  std::vector< graphUtils::Triplet > vec_triplets_validated;
-
-  std::vector<float> vec_errToIdentityPerTriplet;
-  vec_errToIdentityPerTriplet.reserve(vec_triplets.size());
+  //--- -- -  -           Detection of rotation outliers           -  - -- ---//
+  
+  Cycles vec_cycle_validated;
+  
+  std::vector<float> vec_errToIdentityPerCycle;
+  vec_errToIdentityPerCycle.reserve(vec_cycles.size());
   // Compute for each length 3 cycles: the composition error
   // Error to identity rotation.
-  for (size_t i = 0; i < vec_triplets.size(); ++i)
+  for (size_t i = 0; i < vec_cycles.size(); ++i)
   {
-    const graphUtils::Triplet & triplet = vec_triplets[i];
-    const IndexT I = triplet.i, J = triplet.j , K = triplet.k;
-
-    //-- Find the three rotations
-    const Pair ij(I,J);
-    const Pair ji(J,I);
-
-    Mat3 RIJ;
-    if (map_relatives.find(ij) != map_relatives.end())
-      RIJ = map_relatives.at(ij).Rij;
-    else
-      RIJ = map_relatives.at(ji).Rij.transpose();
-
-    const Pair jk(J,K);
-    const Pair kj(K,J);
-
-    Mat3 RJK;
-    if (map_relatives.find(jk) != map_relatives.end())
-      RJK = map_relatives.at(jk).Rij;
-    else
-      RJK = map_relatives.at(kj).Rij.transpose();
-
-    const Pair ki(K,I);
-    const Pair ik(I,K);
-
-    Mat3 RKI;
-    if (map_relatives.find(ki) != map_relatives.end())
-      RKI = map_relatives.at(ki).Rij;
-    else
-      RKI = map_relatives.at(ik).Rij.transpose();
-
-    const Mat3 Rot_To_Identity = RIJ * RJK * RKI; // motion composition
-    const float angularErrorDegree = static_cast<float>(R2D(getRotationMagnitude(Rot_To_Identity)));
-    vec_errToIdentityPerTriplet.push_back(angularErrorDegree);
+    Cycle & cycle = vec_cycles[i];
+    // Compute the consistency error
+    const float angularErrorDegree = cycle.errToIdentity(map_relatives);
+    vec_errToIdentityPerCycle.push_back(angularErrorDegree);
 
     if (angularErrorDegree < max_angular_error)
     {
-      vec_triplets_validated.push_back(triplet);
-
-      if (map_relatives.find(ij) != map_relatives.end())
-        map_relatives_validated[ij] = map_relatives.at(ij);
-      else
-        map_relatives_validated[ji] = map_relatives.at(ji);
-
-      if (map_relatives.find(jk) != map_relatives.end())
-        map_relatives_validated[jk] = map_relatives.at(jk);
-      else
-        map_relatives_validated[kj] = map_relatives.at(kj);
-
-      if (map_relatives.find(ki) != map_relatives.end())
-        map_relatives_validated[ki] = map_relatives.at(ki);
-      else
-        map_relatives_validated[ik] = map_relatives.at(ik);
+      vec_cycle_validated.push_back(cycle);
+      addCycleToMap( cycle, map_relatives_validated );      
     }
   }
   map_relatives.swap(map_relatives_validated);
 
-  // update to keep only useful triplets
-  relativeRotations.clear();
-  relativeRotations.reserve(map_relatives.size());
-  std::transform(map_relatives.begin(), map_relatives.end(), std::back_inserter(relativeRotations), std::RetrieveValue());
-  std::transform(map_relatives.begin(), map_relatives.end(), std::inserter(used_pairs, used_pairs.begin()), std::RetrieveKey());
-
-  // Display statistics about rotation triplets error:
+  //--- -- -  -         Display statistics about cleaning          -  - -- ---//
+  
   std::cout << "\nStatistics about rotation triplets:" << std::endl;
-  minMaxMeanMedian<float>(vec_errToIdentityPerTriplet.begin(), vec_errToIdentityPerTriplet.end());
+  minMaxMeanMedian<float>(vec_errToIdentityPerCycle.begin(),vec_errToIdentityPerCycle.end());
 
-  std::sort(vec_errToIdentityPerTriplet.begin(), vec_errToIdentityPerTriplet.end());
+  std::sort(vec_errToIdentityPerCycle.begin(),vec_errToIdentityPerCycle.end());
 
-  Histogram<float> histo(0.0f, *max_element(vec_errToIdentityPerTriplet.begin(), vec_errToIdentityPerTriplet.end()), 20);
-  histo.Add(vec_errToIdentityPerTriplet.begin(), vec_errToIdentityPerTriplet.end());
+  Histogram<float> histo(0.0f, *max_element(vec_errToIdentityPerCycle.begin(), vec_errToIdentityPerCycle.end()), 20);
+  histo.Add(vec_errToIdentityPerCycle.begin(), vec_errToIdentityPerCycle.end());
   std::cout << histo.ToString() << std::endl;
 
   {
     std::cout << "\nTriplets filtering based on composition error on unit cycles\n";
-    std::cout << "#Triplets before: " << vec_triplets.size() << "\n"
-    << "#Triplets after: " << vec_triplets_validated.size() << std::endl;
+    std::cout << "#Triplets before: " << vec_cycles.size() << "\n"
+    << "#Triplets after: " << vec_cycle_validated.size() << std::endl;
   }
 
-  vec_triplets.clear();
-  vec_triplets = vec_triplets_validated;
+    vec_cycles.clear();
+    vec_cycles = vec_cycle_validated;
 
-  const size_t edges_end_count = relativeRotations.size();
+  const size_t edges_end_count = map_relatives.size();
   std::cout << "\n #Edges removed by triplet inference: " << edges_start_count - edges_end_count << std::endl;
-}
+} // function RotationRejection
   
   
 } // namespace globalSfM
