@@ -1,3 +1,9 @@
+// Copyright (c) 2015 Pierre MOULON.
+
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 #ifndef GLOBALSFM_GRAPH_CLEANER_HPP
 #define GLOBALSFM_GRAPH_CLEANER_HPP
 
@@ -23,7 +29,7 @@ namespace globalSfM{
 ////////////////////////////////////////////////////////////////////////////////
 struct Cycle
 {
-  Cycle(std::vector<Pair> ccycle)
+  Cycle(const std::vector<Pair> &  ccycle)
     :cycle(ccycle)
   { }
 
@@ -43,9 +49,8 @@ struct Cycle
   }
   
   float errToIdentity( const rotation_averaging::RelativeRotations_map map_relatives ){
-    Mat3 rot_To_Identity;
-    rot_To_Identity << 1,0,0,0,1,0,0,0,1;
-
+    Mat3 rot_To_Identity = Mat3::Identity();
+    
     for ( std::vector<Pair>::iterator iter=cycle.begin(); iter!=cycle.end(); ++iter ){
       const Pair p = *iter;
       Mat3 RIJ;
@@ -85,7 +90,7 @@ struct Cycle
   
   friend std::ostream & operator<<(std::ostream & os, const Cycle & c)
   {
-    for (int i = 0; i < cycle.size(); ++i){
+    for (int i = 0; i < c.cycle.size(); ++i){
       os << c.cycle[i] << " ";
     }
     os << std::endl;
