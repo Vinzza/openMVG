@@ -111,9 +111,10 @@ class GlobalSfM_Graph_Cleaner
   private:
     
     mutable Cycles vec_cycles;
-    
+    mutable RelativeInfo_Map relatives_Rt;
     mutable rotation_averaging::RelativeRotations_map map_relatives;
 
+  ////////// // // /  /    /       /          /       /    /  / // // //////////
     
     void addCycleToMap( Cycle & c, rotation_averaging::RelativeRotations_map & map_relatives_new ){
       for ( std::vector<Pair>::iterator iter = c.cycle.begin(); iter != c.cycle.end(); ++iter ){
@@ -126,10 +127,14 @@ class GlobalSfM_Graph_Cleaner
 	    map_relatives_new[ji] = map_relatives.at(ji);
       }
     };
-    
+
   ////////// // // /  /    /       /          /       /    /  / // // //////////
 
   public:
+    
+    GlobalSfM_Graph_Cleaner(const rotation_averaging::RelativeRotations_map & map_relat)
+    :map_relatives(map_relat)
+    { }
     
     void FindCycles() const;
 

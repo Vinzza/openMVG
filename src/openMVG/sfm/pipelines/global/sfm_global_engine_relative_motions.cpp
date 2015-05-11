@@ -114,6 +114,8 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Process() {
   // LOG PRINT
   
   Compute_Relative_Rotations(_relatives_Rt);
+  
+  
     
   if (!Compute_Global_Rotations())
   {
