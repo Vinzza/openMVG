@@ -51,7 +51,6 @@ public:
     const double max_angular_error,
     std::vector< graphUtils::Triplet > & vec_triplets,
     rotation_averaging::RelativeRotations & relativeRotations) const;
-
 };
 
 } // namespace globalSfM

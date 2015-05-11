@@ -42,12 +42,15 @@ bool GlobalSfM_Rotation_AveragingSolver::Run(
       //-------------------
       // Triplet inference (test over the composition error)
       //-------------------
+      /*
       Pair_Set pairs = getPairs(relativeRotations);
       std::vector< graphUtils::Triplet > vec_triplets = graphUtils::tripletListing(pairs);
+      
       //-- Rejection triplet that are 'not' identity rotation (error to identity > 5°)
       TripletRotationRejection(5.0f, vec_triplets, relativeRotations);
-
-      pairs = getPairs(relativeRotations);
+      */
+      
+      Pair_Set pairs = getPairs(relativeRotations);
       const std::set<IndexT> set_remainingIds = graphUtils::CleanGraph_KeepLargestBiEdge_Nodes<Pair_Set, IndexT>(pairs);
       if(set_remainingIds.empty())
         return false;

@@ -14,6 +14,8 @@
 #include "openMVG/system/timer.hpp"
 #include "openMVG/multiview/essential.hpp"
 
+#include "openMVG/sfm/pipelines/global/GlobalSfM_graph_cleaner.hpp"
+
 #include "third_party/progress/progress.hpp"
 
 #ifdef _MSC_VER
@@ -131,33 +133,41 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Process() {
     }
     KeepOnlyReferencedElement(set_remainingIds, _matches_provider->_pairWise_matches);
   }
+  Log_Display_graph("InitialGraph",_matches_provider->_pairWise_matches); // GRAPH DISPLAY
 
-  // LOG PRINT
-  Log_Display_graph("InitialGraph",_matches_provider->_pairWise_matches);
-  // LOG PRINT
-  
+  // 1 - Compute relative rotations (and translation)
   Compute_Relative_Rotations(_relatives_Rt);
-    
+  
+   // 2 - Relavite Rotation Inference
+  {
+    globalSfM::GlobalSfM_Graph_Cleaner graph_cleaner(_relatives_Rt);
+    RelativeInfo_Map old_relatives_Rt = graph_cleaner.Run();
+    old_relatives_Rt.swap(_relatives_Rt);
+  }
+  Log_Display_graph("cleaned graph",_relatives_Rt); // GRAPH DISPLAY
+
+  // 3 - Compute Global Rotation
   if (!Compute_Global_Rotations())
   {
     std::cerr << "GlobalSfM:: Rotation Averaging failure!" << std::endl;
     return false;
   }
-
-  // LOG PRINT
-  Log_Display_graph("cleanedGraph",_matches_provider->_pairWise_matches);
-  // LOG PRINT
   
+  // 4 - Compute Global Translation
   if (!Compute_Global_Translations())
   {
     std::cerr << "GlobalSfM:: Translation Averaging failure!" << std::endl;
     return false;
   }
+  
+  // 5 - Compute triangularization of the 3D points
   if (!Compute_Initial_Structure())
   {
     std::cerr << "GlobalSfM:: Cannot initialize an initial structure!" << std::endl;
     return false;
   }
+  
+  // 6 - Bundle Adjustment
   if (!Adjust())
   {
     std::cerr << "GlobalSfM:: Non-linear adjustment failure!" << std::endl;
@@ -611,12 +621,10 @@ void GlobalSfMReconstructionEngine_RelativeMotions::Compute_Relative_Rotations(R
 ////////////////////////////////////////////////////////////////////////////////
 //                             Log Display Graph                              //
 ////////////////////////////////////////////////////////////////////////////////
-bool GlobalSfMReconstructionEngine_RelativeMotions::Log_Display_graph( const std::string graph_name, const PairWiseMatches & map_matches ){  
+bool GlobalSfMReconstructionEngine_RelativeMotions::Log_Display_graph( const std::string graph_name, const graphUtils::indexedGraph & putativeGraph ){  
   if (!_sLoggingFile.empty())
   {
-    
-    graphUtils::indexedGraph putativeGraph(getPairs(map_matches));
-    
+    std::cout << "Export Graph: " << graph_name << ".svg" << std::endl;
     if (!_sOutDirectory.empty())
     {
       // Save the graph after cleaning:
@@ -634,6 +642,25 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Log_Display_graph( const std
     _htmlDocStream->pushInfo(os.str());
   }
   return (!_sLoggingFile.empty());
+}
+
+bool GlobalSfMReconstructionEngine_RelativeMotions::Log_Display_graph( const std::string graph_name, const PairWiseMatches & map_matches ){  
+  if (!_sLoggingFile.empty())
+  {    
+    graphUtils::indexedGraph putativeGraph(getPairs(map_matches));
+    return GlobalSfMReconstructionEngine_RelativeMotions::Log_Display_graph(graph_name, putativeGraph);
+  }
+}
+
+bool GlobalSfMReconstructionEngine_RelativeMotions::Log_Display_graph( const std::string graph_name, const RelativeInfo_Map & relatives_Rt ){  
+  if (!_sLoggingFile.empty())
+  {
+    Pair_Set pairs;
+    for(RelativeInfo_Map::const_iterator iter = relatives_Rt.begin(); iter != relatives_Rt.end(); ++iter)
+      pairs.insert(iter->first);
+    graphUtils::indexedGraph putativeGraph(pairs);
+    return GlobalSfMReconstructionEngine_RelativeMotions::Log_Display_graph(graph_name, putativeGraph);
+  }
 }
 
 } // namespace openMVG

@@ -48,16 +48,16 @@ struct Cycle
     }
   }
   
-  float errToIdentity( const rotation_averaging::RelativeRotations_map map_relatives ){
+  float errToIdentity( const RelativeInfo_Map relatives_Rt ){
     Mat3 rot_To_Identity = Mat3::Identity();
     
     for ( std::vector<Pair>::iterator iter=cycle.begin(); iter!=cycle.end(); ++iter ){
       const Pair p = *iter;
       Mat3 RIJ;
-      if (map_relatives.find(p) != map_relatives.end())
-	RIJ = map_relatives.at(p).Rij;
+      if (relatives_Rt.find(p) != relatives_Rt.end())
+	RIJ = relatives_Rt.at(p).first;
       else
-	RIJ = map_relatives.at( make_pair(p.second,p.first) ).Rij.transpose();
+	RIJ = relatives_Rt.at( make_pair(p.second,p.first) ).first.transpose();
       rot_To_Identity = RIJ * rot_To_Identity;
     }
     return static_cast<float>(R2D(getRotationMagnitude(rot_To_Identity)));
@@ -107,40 +107,38 @@ typedef std::vector< Cycle > Cycles;
 //////////////////////////////////////////////////////////////////////////////// 
 class GlobalSfM_Graph_Cleaner
 {
+  public:
+    
+    GlobalSfM_Graph_Cleaner(const RelativeInfo_Map & map_relat)
+    :relatives_Rt(map_relat)
+    { }
+    
+    void FindCycles();
+
+    void RotationRejection(const double max_angular_error);
+    
+    RelativeInfo_Map Run();
+    
+  ////////// // // /  /    /       /          /       /    /  / // // //////////
     
   private:
     
-    mutable Cycles vec_cycles;
-    mutable RelativeInfo_Map relatives_Rt;
-    mutable rotation_averaging::RelativeRotations_map map_relatives;
+    Cycles vec_cycles;
+    RelativeInfo_Map relatives_Rt;
 
   ////////// // // /  /    /       /          /       /    /  / // // //////////
     
-    void addCycleToMap( Cycle & c, rotation_averaging::RelativeRotations_map & map_relatives_new ){
+    void addCycleToMap( Cycle & c, RelativeInfo_Map & relatives_Rt_new ){
       for ( std::vector<Pair>::iterator iter = c.cycle.begin(); iter != c.cycle.end(); ++iter ){
 	const Pair ij = *iter;
 	const Pair ji = std::make_pair( ij.second, ij.first );
 	
-	if (map_relatives.find(ij) != map_relatives.end())
-	    map_relatives_new[ij] = map_relatives.at(ij);
+	if (relatives_Rt.find(ij) != relatives_Rt.end())
+	  relatives_Rt_new[ij] = relatives_Rt.at(ij);
 	else
-	    map_relatives_new[ji] = map_relatives.at(ji);
+	  relatives_Rt_new[ji] = relatives_Rt.at(ji);
       }
     };
-
-  ////////// // // /  /    /       /          /       /    /  / // // //////////
-
-  public:
-    
-    GlobalSfM_Graph_Cleaner(const rotation_averaging::RelativeRotations_map & map_relat)
-    :map_relatives(map_relat)
-    { }
-    
-    void FindCycles() const;
-
-    void RotationRejection(const double max_angular_error) const;
-    
-    rotation_averaging::RelativeRotations_map Run() const;
     
 };
 

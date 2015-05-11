@@ -22,13 +22,13 @@ using namespace openMVG::rotation_averaging;
 //                                    Run                                     //
 ////////////////////////////////////////////////////////////////////////////////
 
-rotation_averaging::RelativeRotations_map GlobalSfM_Graph_Cleaner::Run() const
+RelativeInfo_Map GlobalSfM_Graph_Cleaner::Run()
 {
 
   FindCycles();
   RotationRejection(5.0f);
-  
-  return map_relatives;
+      
+  return relatives_Rt;
 
 }
 
@@ -36,12 +36,10 @@ rotation_averaging::RelativeRotations_map GlobalSfM_Graph_Cleaner::Run() const
 //                                Find Cycles                                 //
 ////////////////////////////////////////////////////////////////////////////////
 
-void GlobalSfM_Graph_Cleaner::FindCycles() const {
-  // vec_cycles
-  // mutable rotation_averaging::RelativeRotations_map       map_relatives;
-
+void GlobalSfM_Graph_Cleaner::FindCycles() {
+      
   Pair_Set pair_set;
-  for(RelativeRotations_map::const_iterator iter = map_relatives.begin(); iter != map_relatives.end(); ++iter)
+  for(RelativeInfo_Map::const_iterator iter = relatives_Rt.begin(); iter != relatives_Rt.end(); ++iter)
       pair_set.insert(iter->first);
   
   std::vector<graphUtils::Triplet> vec_triplets = graphUtils::tripletListing(pair_set);
@@ -64,13 +62,11 @@ void GlobalSfM_Graph_Cleaner::FindCycles() const {
 ////////////////////////////////////////////////////////////////////////////////
 ///  Reject edges of the view graph that do not produce triplets with tiny
 ///  angular error once rotation composition have been computed.
-void GlobalSfM_Graph_Cleaner::RotationRejection(const double max_angular_error) const
+void GlobalSfM_Graph_Cleaner::RotationRejection(const double max_angular_error)
 {
-//  mutable Cycles cycle_vec;
-//  mutable rotation_averaging::RelativeRotations_map map_relatives;
-  
-  const size_t edges_start_count = map_relatives.size();  
-  RelativeRotations_map map_relatives_validated;
+    
+  const size_t edges_start_count = relatives_Rt.size();  
+  RelativeInfo_Map map_relatives_validated;
 
   //--- -- -  -           Detection of rotation outliers           -  - -- ---//
   
@@ -84,16 +80,16 @@ void GlobalSfM_Graph_Cleaner::RotationRejection(const double max_angular_error) 
   {
     Cycle & cycle = vec_cycles[i];
     // Compute the consistency error
-    const float angularErrorDegree = cycle.errToIdentity(map_relatives);
+    const float angularErrorDegree = cycle.errToIdentity(relatives_Rt);
     vec_errToIdentityPerCycle.push_back(angularErrorDegree);
 
     if (angularErrorDegree < max_angular_error)
     {
       vec_cycle_validated.push_back(cycle);
-      addCycleToMap( cycle, map_relatives_validated );      
+      addCycleToMap( cycle, map_relatives_validated );
     }
   }
-  map_relatives.swap(map_relatives_validated);
+  relatives_Rt.swap(map_relatives_validated);
 
   //--- -- -  -         Display statistics about cleaning          -  - -- ---//
   
@@ -115,7 +111,7 @@ void GlobalSfM_Graph_Cleaner::RotationRejection(const double max_angular_error) 
     vec_cycles.clear();
     vec_cycles = vec_cycle_validated;
 
-  const size_t edges_end_count = map_relatives.size();
+  const size_t edges_end_count = relatives_Rt.size();
   std::cout << "\n #Edges removed by triplet inference: " << edges_start_count - edges_end_count << std::endl;
 } // function RotationRejection
   
