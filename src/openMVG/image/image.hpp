@@ -25,4 +25,10 @@
 #include "openMVG/image/image_io.hpp"
 #include "openMVG/image/sample.hpp"
 
+#include "openMVG/image/image_convolution_base.hpp"
+#include "openMVG/image/image_convolution.hpp"
+#include "openMVG/image/image_filtering.hpp"
+#include "openMVG/image/image_resampling.hpp"
+#include "openMVG/image/image_diffusion.hpp"
+
 #endif /* OPENMVG_IMAGE_HPP */

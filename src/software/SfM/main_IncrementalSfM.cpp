@@ -8,6 +8,8 @@
 #include <cstdlib>
 
 #include "openMVG/sfm/sfm.hpp"
+#include "software/SfM/io_regions_type.hpp"
+
 #include "openMVG/system/timer.hpp"
 using namespace openMVG;
 
@@ -63,8 +65,6 @@ int main(int argc, char **argv)
   std::string sSfM_Data_Filename;
   std::string sMatchesDir;
   std::string sOutDir = "";
-  bool bRefinePPandDisto = true;
-  bool bRefineFocal = true;
   std::pair<std::string,std::string> initialPairString("","");
   bool bRefineIntrinsics = true;
   int i_User_camera_model = PINHOLE_CAMERA_RADIAL3;
@@ -87,10 +87,10 @@ int main(int argc, char **argv)
     << "[-o|--outdir] path where the output data will be stored\n"
     << "[-a|--initialPairA NAME] \n"
     << "[-b|--initialPairB NAME] \n"
-    << "[-c|--camera_model] Camera model type:\n"
-      << "\t 1: Pinhole (default)\n"
+    << "[-c|--camera_model] Camera model type for view with unknown intrinsic:\n"
+      << "\t 1: Pinhole \n"
       << "\t 2: Pinhole radial 1\n"
-      << "\t 3: Pinhole radial 3\n"
+      << "\t 3: Pinhole radial 3 (default)\n"
     << "[-f|--refineIntrinsics \n"
     << "\t 0-> intrinsic parameters are kept as constant\n"
     << "\t 1-> refine intrinsic parameters (default).] \n"
@@ -108,14 +108,25 @@ int main(int argc, char **argv)
     return EXIT_FAILURE;
   }
 
-  // Prepare the features and matches provider
+  // Init the regions_type from the image describer file (used for image regions extraction)
+  using namespace openMVG::features;
+  const std::string sImage_describer = stlplus::create_filespec(sMatchesDir, "image_describer", "json");
+  std::unique_ptr<Regions> regions_type = Init_region_type_from_file(sImage_describer);
+  if (!regions_type)
+  {
+    std::cerr << "Invalid: "
+      << sImage_describer << " regions type file." << std::endl;
+    return EXIT_FAILURE;
+  }
+
+  // Features reading
   std::shared_ptr<Features_Provider> feats_provider = std::make_shared<Features_Provider>();
-  if (!feats_provider->load(sfm_data, sMatchesDir)) {
+  if (!feats_provider->load(sfm_data, sMatchesDir, regions_type)) {
     std::cerr << std::endl
       << "Invalid features." << std::endl;
     return EXIT_FAILURE;
   }
-
+  // Matches reading
   std::shared_ptr<Matches_Provider> matches_provider = std::make_shared<Matches_Provider>();
   if (!matches_provider->load(sfm_data, stlplus::create_filespec(sMatchesDir, "matches.f.txt"))) {
     std::cerr << std::endl

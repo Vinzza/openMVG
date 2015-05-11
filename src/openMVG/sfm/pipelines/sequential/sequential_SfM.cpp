@@ -23,6 +23,10 @@
 #include "third_party/htmlDoc/htmlDoc.hpp"
 #include "third_party/progress/progress.hpp"
 
+#ifdef _MSC_VER
+#pragma warning( once : 4267 ) //warning C4267: 'argument' : conversion from 'size_t' to 'const int', possible loss of data
+#endif
+
 namespace openMVG{
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -400,6 +404,8 @@ bool SequentialSfMReconstructionEngine::MakeInitialPair3D(const Pair & current_p
   }
   std::cout << "A-Contrario initial pair residual: "
     << relativePose_info.found_residual_precision << std::endl;
+  // Bound min precision at 1 pix.
+  relativePose_info.found_residual_precision = std::max(relativePose_info.found_residual_precision, 1.0);
 
   bool bRefine_using_BA = true;
   if (bRefine_using_BA)
@@ -554,6 +560,7 @@ bool SequentialSfMReconstructionEngine::MakeInitialPair3D(const Pair & current_p
       htmlFileStream << _htmlDocStream->getDoc();
     }
   }
+  return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -902,7 +909,7 @@ bool SequentialSfMReconstructionEngine::Resection(size_t viewIndex)
             (view_I->ui_width, view_I->ui_height, K_(0,0), K_(0,2), K_(1,2));
         break;
         default:
-          std:cerr << "Try to create an unknown camera type." << std::endl;
+          std::cerr << "Try to create an unknown camera type." << std::endl;
           return false;
       }
     }
@@ -1060,7 +1067,6 @@ bool SequentialSfMReconstructionEngine::Resection(size_t viewIndex)
             _sfm_data.structure[trackId].obs[I] = Observation(x1, vec_index[i]._i);
             _sfm_data.structure[trackId].obs[J] = Observation(x2, vec_index[i]._j);
             reconstructed_trackId.insert(trackId);
-            _sfm_data.getLandmarks().at(trackId).X;
           }
         }
         std::cout << "--Triangulated 3D points [" << I << "-" << J <<"]: "

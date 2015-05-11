@@ -8,6 +8,8 @@
 #include <cstdlib>
 
 #include "openMVG/sfm/pipelines/global/sfm_global_engine_relative_motions.hpp"
+#include "software/SfM/io_regions_type.hpp"
+
 #include "openMVG/system/timer.hpp"
 using namespace openMVG;
 
@@ -86,14 +88,25 @@ int main(int argc, char **argv)
     return EXIT_FAILURE;
   }
 
-  // Prepare the features and matches provider
+  // Init the regions_type from the image describer file (used for image regions extraction)
+  using namespace openMVG::features;
+  const std::string sImage_describer = stlplus::create_filespec(sMatchesDir, "image_describer", "json");
+  std::unique_ptr<Regions> regions_type = Init_region_type_from_file(sImage_describer);
+  if (!regions_type)
+  {
+    std::cerr << "Invalid: "
+      << sImage_describer << " regions type file." << std::endl;
+    return EXIT_FAILURE;
+  }
+
+  // Features reading
   std::shared_ptr<Features_Provider> feats_provider = std::make_shared<Features_Provider>();
-  if (!feats_provider->load(sfm_data, sMatchesDir)) {
+  if (!feats_provider->load(sfm_data, sMatchesDir, regions_type)) {
     std::cerr << std::endl
       << "Invalid features." << std::endl;
     return EXIT_FAILURE;
   }
-
+  // Matches reading
   std::shared_ptr<Matches_Provider> matches_provider = std::make_shared<Matches_Provider>();
   if (!matches_provider->load(sfm_data, stlplus::create_filespec(sMatchesDir, "matches.e.txt"))) {
     std::cerr << std::endl
@@ -125,6 +138,12 @@ int main(int argc, char **argv)
 
   // Configure reconstruction parameters
   sfmEngine.Set_bFixedIntrinsics(!bRefineIntrinsics);
+
+  // Configure motion averaging method
+  sfmEngine.SetRotationAveragingMethod(
+    globalSfM::ERotationAveragingMethod(iRotationAveragingMethod));
+  sfmEngine.SetTranslationAveragingMethod(
+    globalSfM::ETranslationAveragingMethod(iTranslationAveragingMethod));
 
   if (sfmEngine.Process())
   {

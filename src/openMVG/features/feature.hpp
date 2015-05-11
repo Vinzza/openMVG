@@ -42,9 +42,17 @@ public:
   virtual inline std::istream& read(std::istream& in)
   { return in >> _coords(0) >> _coords(1); }
 
+  template<class Archive>
+  void serialize(Archive & ar)
+  {
+    ar (_coords(0), _coords(1));
+  }
+
 protected:
   Vec2f _coords;  // (x, y).
 };
+
+typedef std::vector<PointFeature> PointFeatures;
 
 //with overloaded operators:
 inline std::ostream& operator<<(std::ostream& out, const PointFeature& obj)
@@ -94,6 +102,15 @@ public:
   virtual std::istream& read(std::istream& in)
   {
     return PointFeature::read(in) >> _scale >> _orientation;
+  }
+
+  template<class Archive>
+  void serialize(Archive & ar)
+  {
+    ar (
+      _coords(0), _coords(1),
+      _scale,
+      _orientation);
   }
 
 protected:

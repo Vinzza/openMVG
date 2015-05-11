@@ -1,12 +1,7 @@
 ############################
-openMVG softwares& tools
+openMVG softwares & tools
 ############################
   
-Tools & SfM pipelines
-=====================
-
-They can perform:
-
 .. toctree::
   :maxdepth: 1
   

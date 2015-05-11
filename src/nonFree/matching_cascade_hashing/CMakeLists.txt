@@ -11,10 +11,12 @@ ADD_EXECUTABLE(openMVG_main_computeMatchesCasHas
 )
 TARGET_LINK_LIBRARIES(openMVG_main_computeMatchesCasHas
   openMVG_image
+  openMVG_features
   openMVG_multiview
   openMVG_system
+  openMVG_sfm
   vlsift
   stlplus
-  flann_cpp_s)
+  ${OpenMVG_LIBS})
 SET_PROPERTY(TARGET openMVG_main_computeMatchesCasHas PROPERTY FOLDER OpenMVG/nonFree/software)
 

@@ -233,16 +233,13 @@ ADD_SUBDIRECTORY(openMVG)
 # Included for research purpose only
 ADD_SUBDIRECTORY(nonFree)
 
-# openMVG tutorial examples
-IF (OpenMVG_BUILD_EXAMPLES)
-   ADD_SUBDIRECTORY(openMVG_Samples)
-ENDIF (OpenMVG_BUILD_EXAMPLES)
-
 # ==============================================================================
 # openMVG libraries
 # ==============================================================================
 SET(OpenMVG_LIBS
   openMVG_image
+  openMVG_features
+  openMVG_matching_image_collection
   openMVG_multiview
   openMVG_lInftyComputerVision
   openMVG_system
@@ -264,6 +261,11 @@ SET(OpenMVG_LIBS "${OpenMVG_LIBS}"
   easyexif)
 SET(OpenMVG_LIBS "${OpenMVG_LIBS}"
   ${OPENMVG_LIBRARY_DEPENDENCIES} CACHE STRING "openMVG library names")
+
+# openMVG tutorial examples
+IF (OpenMVG_BUILD_EXAMPLES)
+  ADD_SUBDIRECTORY(openMVG_Samples)
+ENDIF (OpenMVG_BUILD_EXAMPLES)
 
 # Complete software build on openMVG
 ADD_SUBDIRECTORY(software)

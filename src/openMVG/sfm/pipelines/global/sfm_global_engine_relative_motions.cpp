@@ -16,6 +16,10 @@
 
 #include "third_party/progress/progress.hpp"
 
+#ifdef _MSC_VER
+#pragma warning( once : 4267 ) //warning C4267: 'argument' : conversion from 'size_t' to 'const int', possible loss of data
+#endif
+
 namespace openMVG{
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -90,9 +94,28 @@ void GlobalSfMReconstructionEngine_RelativeMotions::SetMatchesProvider(Matches_P
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-//                                  PROCESS                                   //
+
+void GlobalSfMReconstructionEngine_RelativeMotions::SetRotationAveragingMethod
+(
+  globalSfM::ERotationAveragingMethod eRotationAveragingMethod
+)
+{
+  _eRotationAveragingMethod = eRotationAveragingMethod;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
+void GlobalSfMReconstructionEngine_RelativeMotions::SetTranslationAveragingMethod
+(
+  globalSfM::ETranslationAveragingMethod eTranslationAveragingMethod
+)
+{
+  _eTranslationAveragingMethod = eTranslationAveragingMethod;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+//                                  PROCESS                                   //
+////////////////////////////////////////////////////////////////////////////////
 bool GlobalSfMReconstructionEngine_RelativeMotions::Process() {
 
   //-------------------
@@ -114,14 +137,13 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Process() {
   // LOG PRINT
   
   Compute_Relative_Rotations(_relatives_Rt);
-  
-  
     
   if (!Compute_Global_Rotations())
   {
     std::cerr << "GlobalSfM:: Rotation Averaging failure!" << std::endl;
     return false;
   }
+
   // LOG PRINT
   Log_Display_graph("cleanedGraph",_matches_provider->_pairWise_matches);
   // LOG PRINT
@@ -354,7 +376,7 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Compute_Initial_Structure()
     structure_estimator.triangulate(_sfm_data);
 
     std::cout << "\n#removed tracks (invalid triangulation): " <<
-      _sfm_data.getLandmarks().size() - trackCountBefore << std::endl;
+      IndexT(_sfm_data.getLandmarks().size()) - trackCountBefore << std::endl;
     std::cout << std::endl << "  Triangulation took (s): " << timer.elapsed() << std::endl;
 
     // Export initial structure
@@ -462,7 +484,7 @@ void GlobalSfMReconstructionEngine_RelativeMotions::Compute_Relative_Rotations(R
   const Pair_Set & pair_set = _matches_provider->getPairs();
   // copy to a vector for use with threading
   const Pair_Vec pair_vec(pair_set.begin(), pair_set.end());
-  C_Progress_display my_progress_bar( pair_vec.size(), std::cout, "\n", " " , "Compute_Relative_Rotations\n" );
+  C_Progress_display my_progress_bar( pair_vec.size(), std::cout, "\nCompute_Relative_Rotations\n" );
 #ifdef OPENMVG_USE_OPENMP
   #pragma omp parallel for schedule(dynamic)
 #endif

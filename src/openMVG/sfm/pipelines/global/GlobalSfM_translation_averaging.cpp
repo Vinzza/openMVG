@@ -97,6 +97,11 @@ bool GlobalSfM_Translation_AveragingSolver::Translation_averaging(
       << "   - Ready to compute " << iNview << " global translations." << "\n"
       << "     from #relative translations: " << vec_initialRijTijEstimates.size() << std::endl;
 
+    if (iNview < 3)
+    {
+      // Too tiny image set to perform motion averaging
+      return false;
+    }
     //-- Update initial estimates from [minId,maxId] to range [0->Ncam]
     const Pair_Set pairs = getPairs(vec_initialRijTijEstimates);
     Hash_Map<IndexT,IndexT> _reindexForward, _reindexBackward;
@@ -381,8 +386,7 @@ void GlobalSfM_Translation_AveragingSolver::ComputePutativeTranslation_EdgesCove
   C_Progress_display my_progress_bar(
     vec_edges.size(),
     std::cout,
-    "\n", " " ,
-    "Computation of the relative translations over the graph with an edge coverage algorithm\n" );
+    "\nComputation of the relative translations over the graph with an edge coverage algorithm\n");
 
   bool bVerbose = false;
 
