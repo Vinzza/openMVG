@@ -48,10 +48,10 @@ struct Cycle
     }
   }
   
-  float errToIdentity( const RelativeInfo_Map relatives_Rt ){
+  float errToIdentity( const RelativeInfo_Map & relatives_Rt ) const{
     Mat3 rot_To_Identity = Mat3::Identity();
     
-    for ( std::vector<Pair>::iterator iter=cycle.begin(); iter!=cycle.end(); ++iter ){
+    for ( std::vector<Pair>::const_iterator iter=cycle.begin(); iter!=cycle.end(); ++iter ){
       const Pair p = *iter;
       Mat3 RIJ;
       if (relatives_Rt.find(p) != relatives_Rt.end())
