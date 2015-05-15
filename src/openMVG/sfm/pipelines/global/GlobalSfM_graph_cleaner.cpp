@@ -115,6 +115,29 @@ void GlobalSfM_Graph_Cleaner::RotationRejection(const double max_angular_error)
   std::cout << "\n #Edges removed by triplet inference: " << edges_start_count - edges_end_count << std::endl;
 } // function RotationRejection
   
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////
+//                               MISCELLANEOUS                                //
+////////////////////////////////////////////////////////////////////////////////
+
+void GlobalSfM_Graph_Cleaner::disp_graph(const string str) const {
+  for (Graph::NodeIt iter(g); iter!=lemon::INVALID; ++iter){
+    Vec3 foo = position_GroundTruth[nodeMapIndex.at(iter)];
+    std::cout << "\\node[n" << str << "] at (" << foo(0) <<  ","<< foo(2) << ")" << " (" << nodeMapIndex.at(iter) << ") " << "{" << nodeMapIndex.at(iter) << "}; ";
+  }
+  std::cout << std::endl;
+  for (Graph::ArcIt edge(g); edge!=lemon::INVALID; ++edge){
+    IndexT s = nodeMapIndex.at(g.source(edge));    IndexT t = nodeMapIndex.at(g.target(edge));
+    if (s < t) {
+      std::cout << s << " -> " << t << std::endl;
+      std::cout << "\\draw[e" << str << " = " << CohenrencyMap.at(std::make_pair(s,t)) << "] (" << s << ") -- (" << t << "); ";
+    }
+  }
+}
+
   
 } // namespace globalSfM
 } // namespace openMVG

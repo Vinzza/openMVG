@@ -19,7 +19,7 @@ namespace globalSfM{
 #include "openMVG/graph/graph.hpp"
 #include "openMVG/multiview/rotation_averaging_common.hpp"
 
-
+// #include <lemon/list_graph.h>
 
 namespace openMVG{
 namespace globalSfM{
@@ -105,41 +105,115 @@ typedef std::vector< Cycle > Cycles;
 ////////////////////////////////////////////////////////////////////////////////
 //                          Global SfM Graph Cleaner                          //
 //////////////////////////////////////////////////////////////////////////////// 
+
+typedef lemon::ListGraph Graph;
+
+
 class GlobalSfM_Graph_Cleaner
 {
   public:
     
+  ////////// // // /  /    /       /          /       /    /  / // // //////////
+  //                               CONSTRUCTORS                               //    
+  ////////// // // /  /    /       /          /       /    /  / // // //////////
     GlobalSfM_Graph_Cleaner(const RelativeInfo_Map & map_relat)
-    :relatives_Rt(map_relat)
-    { }
-    
-    void FindCycles();
-
-    void RotationRejection(const double max_angular_error);
+    :relatives_Rt(map_relat) {
+      // Build SetNodes
+      std::set<IndexT> setNodes;
+      std::cout << "Graph initialisation:" << std::endl;
+      for(RelativeInfo_Map::const_iterator iter = map_relat.begin(); iter != map_relat.end(); ++iter) {
+	setNodes.insert(iter->first.first);	setNodes.insert(iter->first.second);      }
+      std::cout << "Nodes:";
+      // Build association beetween Node and indexT
+      for (std::set<IndexT>::const_iterator iter = setNodes.begin(); iter != setNodes.end(); ++iter) {
+	indexMapNode[*iter] = g.addNode();      nodeMapIndex[ indexMapNode[*iter] ] = *iter;
+	std::cout << " " << g.id(indexMapNode[*iter]);
+      }      
+      // Add the edge
+      int count = 0;
+      std::cout << "\nEdges:";
+      for(RelativeInfo_Map::const_iterator iter = map_relat.begin(); iter != map_relat.end(); ++iter) {
+	const Pair p = std::make_pair(iter->first.first, iter->first.second);
+	pairMapEdge[p] = g.addEdge(indexMapNode[p.first], indexMapNode[p.second]);
+        std::cout << " (" << p.first << "," << p.second << ") ";      
+	CohenrencyMap[p] = count; count+=1; }
+      std::cout << "\ninitialisation end\n" << std::endl;
+    }
+  ////////// // // /  /    /       /          /       /    /  / // // //////////
     
     RelativeInfo_Map Run();
     
   ////////// // // /  /    /       /          /       /    /  / // // //////////
+  //                              MISCELLANEOUS                               //
+  ////////// // // /  /    /       /          /       /    /  / // // //////////
+    // Display for TikZ
+    void disp_graph(const string str) const;
     
+  ////////// // // /  /    /       /          /       /    /  / // // //////////
+  //                              DEBUG FUNCTION                              //
+  ////////// // // /  /    /       /          /       /    /  / // // //////////
+    void set_position_groundtruth( const std::vector<Vec3> & v ){
+      position_GroundTruth = v;
+    }
+    
+  void change_consistency( const int a, const int b){
+    for (std::map<Pair,int>::iterator iter = CohenrencyMap.begin(); iter != CohenrencyMap.end();  ++iter) {
+      if ( iter->second == a ) { iter->second = b; }
+    }    
+  }
+    
+  ////////// // // /  /    /       /          /       /    /  / // // //////////
+  //                             PRIVATE FONCTION                             //    
+  ////////// // // /  /    /       /          /       /    /  / // // //////////
   private:
     
     Cycles vec_cycles;
     RelativeInfo_Map relatives_Rt;
-
+    std::map< Pair, int > CohenrencyMap;
+    
+    Graph g;
+    std::map<Graph::Node, IndexT> nodeMapIndex;
+    std::map<IndexT, Graph::Node> indexMapNode;
+    std::map<Pair, Graph::Edge> pairMapEdge;
+    
+    // debug
+    std::vector<Vec3> position_GroundTruth;
+    
   ////////// // // /  /    /       /          /       /    /  / // // //////////
     
+    void FindCycles();
+    void RotationRejection(const double max_angular_error);    
     void addCycleToMap( Cycle & c, RelativeInfo_Map & relatives_Rt_new ){
       for ( std::vector<Pair>::iterator iter = c.cycle.begin(); iter != c.cycle.end(); ++iter ){
-	const Pair ij = *iter;
-	const Pair ji = std::make_pair( ij.second, ij.first );
-	
+	const Pair ij = *iter;	
 	if (relatives_Rt.find(ij) != relatives_Rt.end())
 	  relatives_Rt_new[ij] = relatives_Rt.at(ij);
-	else
+	else {
+	  const Pair ji = std::make_pair( ij.second, ij.first );
 	  relatives_Rt_new[ji] = relatives_Rt.at(ji);
+	}
       }
-    };
+    }
     
+    ////////////////////////////////////////////////////////////////////////////
+    //                                 TREES                                  //
+    ////////////////////////////////////////////////////////////////////////////
+	  
+    typedef std::set<Pair> Tree;
+
+    Tree generate_Random_Tree( const Graph & g, const int size ) const{
+      Tree tree;
+      // TODO
+      return tree;
+    };
+
+    double tree_consistency_error( const Tree & t, const RelativeInfo_Map & relatives_Rt ) const{
+      // TODO
+      return 0;
+    }
+      
+  ////////// // // /  /    /       /          /       /    /  / // // //////////
+  
 };
 
 

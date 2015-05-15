@@ -138,7 +138,7 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Process() {
   // 1 - Compute relative rotations (and translation)
   Compute_Relative_Rotations(_relatives_Rt);
   
-   // 2 - Relavite Rotation Inference
+   // 2 - Relative Rotation Inference
   {
     globalSfM::GlobalSfM_Graph_Cleaner graph_cleaner(_relatives_Rt);
     RelativeInfo_Map old_relatives_Rt = graph_cleaner.Run();

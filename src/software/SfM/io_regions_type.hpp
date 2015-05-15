@@ -11,6 +11,8 @@
 #include "openMVG/features/features.hpp"
 #include <cereal/archives/json.hpp>
 
+#include "third_party/stlplus3/filesystemSimplified/file_system.hpp"
+
 #include <fstream>
 #include <vector>
 

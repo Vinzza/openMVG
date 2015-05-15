@@ -157,6 +157,7 @@ namespace openMVG {
   /// Return in radian the mean rotation amplitude of the given rotation matrix
   /// Computed as the mean of matrix column dot products to an Identity matrix
   double  getRotationMagnitude(const Mat3 & R2);
+  double  getRotationAngle(const Mat3 & R2);
 
   inline double SIGN(double x) {
     return x < 0.0 ? -1.0 : 1.0;

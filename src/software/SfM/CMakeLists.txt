@@ -195,6 +195,17 @@ TARGET_LINK_LIBRARIES(openMVG_main_evalQuality
 SET_PROPERTY(TARGET openMVG_main_evalQuality PROPERTY FOLDER OpenMVG/software)
 INSTALL(TARGETS openMVG_main_evalQuality DESTINATION bin/)
 
+###
+# Graph Cleaning Test (Z)
+###
+
+ADD_EXECUTABLE(GC_test GC_test.cpp)
+TARGET_LINK_LIBRARIES(GC_test
+                     ${OpenMVG_LIBS})
+#installation rules
+SET_PROPERTY(TARGET GC_test PROPERTY FOLDER OpenMVG/software)
+INSTALL(TARGETS GC_test DESTINATION bin/)
+
 ##
 # Export tutorial with valid path thanks to a configuration file
 ##
