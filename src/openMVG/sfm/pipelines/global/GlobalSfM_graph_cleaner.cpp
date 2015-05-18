@@ -24,27 +24,23 @@ using namespace openMVG::rotation_averaging;
 
 RelativeInfo_Map GlobalSfM_Graph_Cleaner::Run()
 {
-
-  FindCycles();
-  RotationRejection(5.0f);
-      
+  Cycles cycles = FindCycles();
+  RotationRejection(5.0f, cycles);
   return relatives_Rt;
-
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 //                                Find Cycles                                 //
 ////////////////////////////////////////////////////////////////////////////////
 
-void GlobalSfM_Graph_Cleaner::FindCycles() {
-      
+Cycles GlobalSfM_Graph_Cleaner::FindCycles() {
   Pair_Set pair_set;
   for(RelativeInfo_Map::const_iterator iter = relatives_Rt.begin(); iter != relatives_Rt.end(); ++iter)
       pair_set.insert(iter->first);
   
   std::vector<graphUtils::Triplet> vec_triplets = graphUtils::tripletListing(pair_set);
   
-  vec_cycles.clear();
+  Cycles vec_cycles;
   vec_cycles.reserve(vec_triplets.size());
   
   for ( std::vector<graphUtils::Triplet>::iterator iter=vec_triplets.begin(); iter!=vec_triplets.end(); ++iter ) {
@@ -55,6 +51,7 @@ void GlobalSfM_Graph_Cleaner::FindCycles() {
     cycle_cst.push_back( std::make_pair(triplet_i.k, triplet_i.i) );
     vec_cycles.push_back(Cycle(cycle_cst));
   }
+  return vec_cycles;
 }
   
 ////////////////////////////////////////////////////////////////////////////////
@@ -62,7 +59,8 @@ void GlobalSfM_Graph_Cleaner::FindCycles() {
 ////////////////////////////////////////////////////////////////////////////////
 ///  Reject edges of the view graph that do not produce triplets with tiny
 ///  angular error once rotation composition have been computed.
-void GlobalSfM_Graph_Cleaner::RotationRejection(const double max_angular_error)
+void GlobalSfM_Graph_Cleaner::RotationRejection(const double max_angular_error,
+						Cycles & vec_cycles)
 {
     
   const size_t edges_start_count = relatives_Rt.size();  
@@ -82,11 +80,14 @@ void GlobalSfM_Graph_Cleaner::RotationRejection(const double max_angular_error)
     // Compute the consistency error
     const float angularErrorDegree = cycle.errToIdentity(relatives_Rt);
     vec_errToIdentityPerCycle.push_back(angularErrorDegree);
-
+    
     if (angularErrorDegree < max_angular_error)
     {
       vec_cycle_validated.push_back(cycle);
       addCycleToMap( cycle, map_relatives_validated );
+      for (int i = 0; i < cycle.cycle.size()-1; ++i) {
+	change_consistency(cycle.cycle[i], cycle.cycle[i+1]);
+      }
     }
   }
   relatives_Rt.swap(map_relatives_validated);
@@ -104,40 +105,95 @@ void GlobalSfM_Graph_Cleaner::RotationRejection(const double max_angular_error)
 
   {
     std::cout << "\nTriplets filtering based on composition error on unit cycles\n";
-    std::cout << "#Triplets before: " << vec_cycles.size() << "\n"
+    std::cout << "#Triplets before: " << vec_cycles.size() << "\n"                                                           
     << "#Triplets after: " << vec_cycle_validated.size() << std::endl;
   }
-
-    vec_cycles.clear();
-    vec_cycles = vec_cycle_validated;
-
   const size_t edges_end_count = relatives_Rt.size();
   std::cout << "\n #Edges removed by triplet inference: " << edges_start_count - edges_end_count << std::endl;
 } // function RotationRejection
   
 
 
-
-
 ////////////////////////////////////////////////////////////////////////////////
 //                               MISCELLANEOUS                                //
 ////////////////////////////////////////////////////////////////////////////////
 
-void GlobalSfM_Graph_Cleaner::disp_graph(const string str) const {
+void GlobalSfM_Graph_Cleaner::disp_graph(const string str) {
   for (Graph::NodeIt iter(g); iter!=lemon::INVALID; ++iter){
     Vec3 foo = position_GroundTruth[nodeMapIndex.at(iter)];
     std::cout << "\\node[n" << str << "] at (" << foo(0) <<  ","<< foo(2) << ")" << " (" << nodeMapIndex.at(iter) << ") " << "{" << nodeMapIndex.at(iter) << "}; ";
   }
   std::cout << std::endl;
+/*  
+  for(Adjacency_map::iterator iter = adjacency_map.begin();
+      iter != adjacency_map.end(); ++iter) {
+    IndexT s = iter->first;
+    std::set<IndexT> & indexT_set = iter->second;
+  
+    for (std::set<IndexT>::iterator iterT = indexT_set.begin();
+	 iterT != indexT_set.end(); ++iterT) {
+      IndexT t = *iterT;
+      if (s < t) {
+	if (CohenrenceMap.find(std::make_pair(s,t)) != CohenrenceMap.end())
+	  std::cout << "\\draw[e" << str << " = " << CohenrenceMap.at(std::make_pair(s,t)) << "] (" << s << ") -- (" << t << "); ";
+	else
+	  std::cout << "\\draw[e" << str << " = " << CohenrenceMap.at(std::make_pair(t,s)) << "] (" << s << ") -- (" << t << "); ";
+      }
+    }  
+  }*/
+  
   for (Graph::ArcIt edge(g); edge!=lemon::INVALID; ++edge){
     IndexT s = nodeMapIndex.at(g.source(edge));    IndexT t = nodeMapIndex.at(g.target(edge));
     if (s < t) {
-      std::cout << s << " -> " << t << std::endl;
-      std::cout << "\\draw[e" << str << " = " << CohenrencyMap.at(std::make_pair(s,t)) << "] (" << s << ") -- (" << t << "); ";
+      if (CohenrenceMap.find(std::make_pair(s,t)) != CohenrenceMap.end())
+	std::cout << "\\zdraw["<< str << "][" << CohenrenceMap.at(std::make_pair(s,t)) << "] (" << s << ") -- (" << t << "); ";
+      else
+	std::cout << "\\zdraw["<< str << "][" << CohenrenceMap.at(std::make_pair(t,s)) << "] (" << s << ") -- (" << t << "); ";
     }
   }
+  std::cout << "\n----------------------------------------------------" << std::endl;
 }
 
+  
+  
+////////////////////////////////////////////////////////////////////////////////
+//                                   TREES                                    //
+////////////////////////////////////////////////////////////////////////////////
+  
+  // typedef std::set<Pair> Tree;
+  
+  double GlobalSfM_Graph_Cleaner::tree_consistency_error( const Tree & tree, const RelativeInfo_Map & relatives_Rt ) const{
+    // Local 'Global' transformation to speedup the computation
+    std::map<IndexT,std::pair<Mat3,Vec3>> globalTransformation;
+    // Computation of the Cocal 'Global' Transformation
+    std::list<IndexT> markedIndexT;
+    // root initialisation
+    IndexT root = tree.begin()->first;
+    markedIndexT.push_back(root);
+    Vec3 zeros;    zeros << 0.,0.,0.;
+    Mat3 id3 = Mat3::Identity();
+    globalTransformation[root] = std::make_pair(id3, zeros);
+
+    while (!markedIndexT.empty()){
+      IndexT s = markedIndexT.front();
+      for (Tree::iterator iter = tree.begin(); iter != tree.end(); ++iter) {
+	IndexT a = iter->first;	IndexT b = iter->second;
+	if (s == a && globalTransformation.find(b) == globalTransformation.end()){
+	  markedIndexT.push_back(b);
+	  globalTransformation[b] = std::make_pair(id3, zeros); // <--(TODO)
+	} else if(s == b && globalTransformation.find(a) == globalTransformation.end()) {
+	  markedIndexT.push_back(a);
+	  globalTransformation[a] = std::make_pair(id3, zeros); // <--(TODO)
+	}
+      }
+      markedIndexT.pop_front();
+    }
+    // TODO
+    // adjacency_map.begin()
+    return 0.;
+  }
+  
+  
   
 } // namespace globalSfM
 } // namespace openMVG

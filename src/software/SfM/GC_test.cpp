@@ -37,9 +37,9 @@ int main(int argc, char **argv)
   std::default_random_engine generator;
   std::uniform_real_distribution<double> unif_distrib(0.0,1.0);
   
-  int n_views = 10;
+  int n_views = 20;
   int total_edge = n_views * (n_views) / 2;
-  int n_wrong_edges = int( .1 * total_edge );  // 10%
+  int n_wrong_edges = int( .3 * total_edge );  // 10%
   double min_angular_error = D2R(30);
   
   RelativeInfo_Map map_relative;
@@ -90,8 +90,8 @@ int main(int argc, char **argv)
   globalSfM::GlobalSfM_Graph_Cleaner graph_cleaner(map_relative);
   graph_cleaner.set_position_groundtruth(C_global);
   std::cout << "-----------------------------------------------------------\nDisplay" << std::endl;
-  graph_cleaner.disp_graph("base");
   RelativeInfo_Map old_relatives_Rt = graph_cleaner.Run();
+  graph_cleaner.disp_graph("base");
 
   std::cout << " Total time took (s): " << timer.elapsed() << std::endl;
 

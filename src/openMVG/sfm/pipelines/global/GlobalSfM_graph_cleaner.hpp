@@ -134,55 +134,80 @@ class GlobalSfM_Graph_Cleaner
       std::cout << "\nEdges:";
       for(RelativeInfo_Map::const_iterator iter = map_relat.begin(); iter != map_relat.end(); ++iter) {
 	const Pair p = std::make_pair(iter->first.first, iter->first.second);
+	// Initialisation of PairMapEdge
 	pairMapEdge[p] = g.addEdge(indexMapNode[p.first], indexMapNode[p.second]);
-        std::cout << " (" << p.first << "," << p.second << ") ";      
-	CohenrencyMap[p] = count; count+=1; }
+	adjacency_map[p.first].insert(p.second);
+	adjacency_map[p.second].insert(p.first);
+	std::cout << " (" << p.first << "," << p.second << ") ";      
+	CohenrenceMap[p] = count; count+=1; }  // Initialisation of conherencMap
       std::cout << "\ninitialisation end\n" << std::endl;
     }
   ////////// // // /  /    /       /          /       /    /  / // // //////////
-    
+      
     RelativeInfo_Map Run();
     
   ////////// // // /  /    /       /          /       /    /  / // // //////////
   //                              MISCELLANEOUS                               //
   ////////// // // /  /    /       /          /       /    /  / // // //////////
-    // Display for TikZ
-    void disp_graph(const string str) const;
-    
+  // Display for TikZ
+    void disp_graph(const string str);
+      
   ////////// // // /  /    /       /          /       /    /  / // // //////////
   //                              DEBUG FUNCTION                              //
   ////////// // // /  /    /       /          /       /    /  / // // //////////
     void set_position_groundtruth( const std::vector<Vec3> & v ){
       position_GroundTruth = v;
     }
-    
-  void change_consistency( const int a, const int b){
-    for (std::map<Pair,int>::iterator iter = CohenrencyMap.begin(); iter != CohenrencyMap.end();  ++iter) {
-      if ( iter->second == a ) { iter->second = b; }
-    }    
-  }
+      
+    void change_consistency( const int a, const int b ){
+      if ( a != b ) {
+	for (std::map<Pair,int>::iterator iter = CohenrenceMap.begin(); iter != CohenrenceMap.end();  ++iter) {
+	  if ( iter->second == a ) { iter->second = b; }
+	}
+      }
+    }
+    void change_consistency( const Pair a, const Pair b ){
+      int ca;
+      if (CohenrenceMap.find(a) != CohenrenceMap.end())	{ ca = CohenrenceMap.at(a); }
+      else { ca = CohenrenceMap.at(std::make_pair(a.second, a.first)); }
+
+      if (CohenrenceMap.find(b) != CohenrenceMap.end())
+	change_consistency( ca, CohenrenceMap.at(b));
+      else
+	change_consistency( ca, CohenrenceMap.at(std::make_pair(b.second, b.first)));
+    }
     
   ////////// // // /  /    /       /          /       /    /  / // // //////////
   //                             PRIVATE FONCTION                             //    
   ////////// // // /  /    /       /          /       /    /  / // // //////////
   private:
-    
-    Cycles vec_cycles;
+    // Relative transformation Map
     RelativeInfo_Map relatives_Rt;
-    std::map< Pair, int > CohenrencyMap;
+    // Conherence Map code the cohenrent set of edges. 
+    std::map< Pair, int > CohenrenceMap;
     
+    // Graph
     Graph g;
+    // Map to switch from IndexT to Node and Node to IndexT
     std::map<Graph::Node, IndexT> nodeMapIndex;
     std::map<IndexT, Graph::Node> indexMapNode;
+    // Map to switch from Pair to Edge
     std::map<Pair, Graph::Edge> pairMapEdge;
+
+    // Adjacency map
+    typedef std::map<IndexT, std::set<IndexT>> Adjacency_map;
+    Adjacency_map adjacency_map;
+    
     
     // debug
     std::vector<Vec3> position_GroundTruth;
     
   ////////// // // /  /    /       /          /       /    /  / // // //////////
     
-    void FindCycles();
-    void RotationRejection(const double max_angular_error);    
+    Cycles FindCycles();
+    
+    void RotationRejection(const double max_angular_error, Cycles & vec_cycles);    
+    
     void addCycleToMap( Cycle & c, RelativeInfo_Map & relatives_Rt_new ){
       for ( std::vector<Pair>::iterator iter = c.cycle.begin(); iter != c.cycle.end(); ++iter ){
 	const Pair ij = *iter;	
@@ -207,13 +232,10 @@ class GlobalSfM_Graph_Cleaner
       return tree;
     };
 
-    double tree_consistency_error( const Tree & t, const RelativeInfo_Map & relatives_Rt ) const{
-      // TODO
-      return 0;
-    }
+    double tree_consistency_error( const Tree & t, const RelativeInfo_Map & relatives_Rt ) const;
+    
       
   ////////// // // /  /    /       /          /       /    /  / // // //////////
-  
 };
 
 
