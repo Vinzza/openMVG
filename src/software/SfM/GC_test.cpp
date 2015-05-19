@@ -39,7 +39,7 @@ int main(int argc, char **argv)
   
   int n_views = 20;
   int total_edge = n_views * (n_views) / 2;
-  int n_wrong_edges = int( .3 * total_edge );  // 10%
+  int n_wrong_edges = int( .3 * total_edge );  // 30%
   double min_angular_error = D2R(30);
   
   RelativeInfo_Map map_relative;
@@ -80,7 +80,7 @@ int main(int argc, char **argv)
 	R_error << cos(theta), 0.0, -sin(theta), 0.0, 1.0, 0.0, sin(theta), 0.0, cos(theta);
 	Rij = R_error*Rij;
 	edge_left -= 1;
-	std::cout << "(" << i << "," << j << "){" << R2D(theta) <<'}'  << std::endl;
+	std::cout << "(" << i << "," << j << "){" << R2D(theta) << "} : ";
       }
       map_relative[Pair_ij] = std::make_pair( Rij, tij );
       total_edge -= 1;
@@ -92,7 +92,17 @@ int main(int argc, char **argv)
   std::cout << "-----------------------------------------------------------\nDisplay" << std::endl;
   RelativeInfo_Map old_relatives_Rt = graph_cleaner.Run();
   graph_cleaner.disp_graph("base");
-
+  
+  std::cout << "\nRANDOM TREE" << std::endl;
+  globalSfM::Tree test_tree = graph_cleaner.generate_Random_Tree(10);
+  
+  for (globalSfM::Tree::const_iterator iter = test_tree.begin(); iter != test_tree.end(); ++iter)
+    std::cout << "(" << iter->first << ") -> (" << iter->second << ")" << std::endl;
+  
+  double tree_err = graph_cleaner.tree_consistency_error( test_tree );
+  std::cout << "error: " << tree_err << std::endl;
+  
+  
   std::cout << " Total time took (s): " << timer.elapsed() << std::endl;
 
   return EXIT_SUCCESS;

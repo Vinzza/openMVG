@@ -90,7 +90,7 @@ void GlobalSfM_Graph_Cleaner::RotationRejection(const double max_angular_error,
       }
     }
   }
-  relatives_Rt.swap(map_relatives_validated);
+  //relatives_Rt.swap(map_relatives_validated);
 
   //--- -- -  -         Display statistics about cleaning          -  - -- ---//
   
@@ -108,7 +108,7 @@ void GlobalSfM_Graph_Cleaner::RotationRejection(const double max_angular_error,
     std::cout << "#Triplets before: " << vec_cycles.size() << "\n"                                                           
     << "#Triplets after: " << vec_cycle_validated.size() << std::endl;
   }
-  const size_t edges_end_count = relatives_Rt.size();
+  const size_t edges_end_count = map_relatives_validated.size();
   std::cout << "\n #Edges removed by triplet inference: " << edges_start_count - edges_end_count << std::endl;
 } // function RotationRejection
   
@@ -118,7 +118,7 @@ void GlobalSfM_Graph_Cleaner::RotationRejection(const double max_angular_error,
 //                               MISCELLANEOUS                                //
 ////////////////////////////////////////////////////////////////////////////////
 
-void GlobalSfM_Graph_Cleaner::disp_graph(const string str) {
+void GlobalSfM_Graph_Cleaner::disp_graph(const string str) const {
   for (Graph::NodeIt iter(g); iter!=lemon::INVALID; ++iter){
     Vec3 foo = position_GroundTruth[nodeMapIndex.at(iter)];
     std::cout << "\\node[n" << str << "] at (" << foo(0) <<  ","<< foo(2) << ")" << " (" << nodeMapIndex.at(iter) << ") " << "{" << nodeMapIndex.at(iter) << "}; ";
@@ -161,39 +161,128 @@ void GlobalSfM_Graph_Cleaner::disp_graph(const string str) {
 ////////////////////////////////////////////////////////////////////////////////
   
   // typedef std::set<Pair> Tree;
-  
-  double GlobalSfM_Graph_Cleaner::tree_consistency_error( const Tree & tree, const RelativeInfo_Map & relatives_Rt ) const{
+     
+    
+  double GlobalSfM_Graph_Cleaner::tree_consistency_error(const Tree & tree) const {
     // Local 'Global' transformation to speedup the computation
     std::map<IndexT,std::pair<Mat3,Vec3>> globalTransformation;
-    // Computation of the Cocal 'Global' Transformation
-    std::list<IndexT> markedIndexT;
+    double consistency_error = 0;
+    
+    ////////// // // /  /    /       /          /       /    /  / // // //////////
+    //             Computation of the Local 'Global' Transformation             //
+    std::list<IndexT> markedIndexT; // (TODO)-> : list<Pair> : the edges we still need to use
     // root initialisation
     IndexT root = tree.begin()->first;
     markedIndexT.push_back(root);
-    Vec3 zeros;    zeros << 0.,0.,0.;
-    Mat3 id3 = Mat3::Identity();
-    globalTransformation[root] = std::make_pair(id3, zeros);
-
+    std::pair<Mat3,Vec3> p_i;
+    Vec3 t_i;    t_i << 0.,0.,0.;
+    Mat3 R_i = Mat3::Identity();
+    globalTransformation[root] = std::make_pair(R_i, t_i);
+        
     while (!markedIndexT.empty()){
       IndexT s = markedIndexT.front();
       for (Tree::iterator iter = tree.begin(); iter != tree.end(); ++iter) {
 	IndexT a = iter->first;	IndexT b = iter->second;
 	if (s == a && globalTransformation.find(b) == globalTransformation.end()){
+	  // Extract local transformation for (s -> b)
+	  if (relatives_Rt.find(std::make_pair(s,b)) != relatives_Rt.end()) {
+	    p_i = relatives_Rt.at(std::make_pair(s,b));
+	    R_i = p_i.first;			t_i = p_i.second; }
+	  else {
+	    p_i = relatives_Rt.at(std::make_pair(b,s));
+	    R_i = p_i.first.transpose();	t_i = p_i.second; }
+
+	  // Extract global transformation of (s)
+	  p_i = globalTransformation.at(s);
+	  t_i = R_i * p_i.second + t_i;       // Global transformation of (b)
+	  R_i = R_i * p_i.first;              // Global transformation of (b)
+	    
+	  globalTransformation[b] = std::make_pair(R_i, t_i);
 	  markedIndexT.push_back(b);
-	  globalTransformation[b] = std::make_pair(id3, zeros); // <--(TODO)
-	} else if(s == b && globalTransformation.find(a) == globalTransformation.end()) {
+	  
+	} else if(s == b && globalTransformation.find(a) == globalTransformation.end()) {	  
+	  // Extract local transformation for (s -> a)
+	  if (relatives_Rt.find(std::make_pair(s,a)) != relatives_Rt.end()) {
+	    p_i = relatives_Rt.at(std::make_pair(s,a));
+	    R_i = p_i.first;			t_i = p_i.second; }
+	  else {
+	    p_i = relatives_Rt.at(std::make_pair(a,s));
+	    R_i = p_i.first.transpose();	t_i = p_i.second; }
+
+	  // Extract global transformation of (s)
+	  p_i = globalTransformation.at(s);
+	  t_i = R_i * p_i.second + t_i;       // Global transformation of (a)
+	  R_i = R_i * p_i.first;              // Global transformation of (a)
+	    
+	  globalTransformation[a] = std::make_pair(R_i, t_i);
 	  markedIndexT.push_back(a);
-	  globalTransformation[a] = std::make_pair(id3, zeros); // <--(TODO)
 	}
       }
       markedIndexT.pop_front();
     }
-    // TODO
-    // adjacency_map.begin()
-    return 0.;
+    ////////// // // /  /    /       /          /       /    /  / // // //////////
+    //                      Compute the consistency error                       //
+    for(RelativeInfo_Map::const_iterator iter = relatives_Rt.begin();
+	iter != relatives_Rt.end(); ++iter) {
+      const openMVG::relativeInfo & rel = *iter;
+      if ( globalTransformation.find(rel.first.first) != globalTransformation.end()
+	  && globalTransformation.find(rel.first.second) != globalTransformation.end()
+	  && tree.find(rel.first) == tree.end()) {
+	R_i = rel.second.first; // R_i == R_(first -> second) == R_s * R_f^T
+	p_i = globalTransformation.at(rel.first.first);
+	R_i = R_i * p_i.first;  // R_i == R_s * R'_f^T * R'_f
+	p_i = globalTransformation.at(rel.first.second);
+	R_i = R_i * p_i.first.transpose();
+	// R_i ==  R_s * R'_f^T * R'_f * R'_s^T == (R_s * R_f^T) * (R'_s * R'_f^T)^T
+
+	consistency_error += R2D(getRotationMagnitude(R_i));
+	std::cout << "(" << rel.first.first << "," << rel.first.second << ") : "<< R2D(getRotationMagnitude(R_i)) << " " << std::endl;
+      }
+    }
+    return consistency_error;
   }
   
-  
+  Tree GlobalSfM_Graph_Cleaner::generate_Random_Tree( const int size ) const{
+    // Assertion
+    if (size > adjacency_map.size()) { throw "Tree to large for the graph."; }
+    
+    Tree tree;
+    std::vector<IndexT> random_nodes;	random_nodes.reserve(adjacency_map.size());
+    std::set<IndexT> tree_nodes;
+    int count = 1;
+
+    // Select the first node
+    Adjacency_map::const_iterator it = adjacency_map.begin();
+    std::advance(it, rand() % adjacency_map.size());
+    IndexT r_node = it->first;
+    
+    tree_nodes.insert(r_node);
+    random_nodes.push_back(r_node);
+    while ( count < size ) {
+      int r_position = rand() % random_nodes.size();
+      r_node = random_nodes[r_position];
+      const std::set<IndexT> & adj_set = adjacency_map.at(r_node);
+      std::vector<IndexT> adj_vec(adj_set.begin(), adj_set.end()); 
+      bool b = true;
+      
+      std::random_shuffle(adj_vec.begin(), adj_vec.end());
+            
+      // starting from r_node, we search for a new adjacent node which is not already in tree_nodes
+      for ( std::vector<IndexT>::const_iterator iter=adj_vec.begin(); b && iter!=adj_vec.end(); ++iter ) {
+	if( tree_nodes.find(*iter) == tree_nodes.end() ){
+	  b = false;
+	  tree_nodes.insert(*iter);
+	  tree.insert(std::make_pair(r_node, *iter));
+	  random_nodes.push_back(*iter);
+	  count += 1;
+	}
+      }
+      if (b) {// r_node is only connected to node already in the tree
+	//random_nodes.erase(r_position); <-(TODO)
+      }
+    }
+    return tree;
+  }
   
 } // namespace globalSfM
 } // namespace openMVG

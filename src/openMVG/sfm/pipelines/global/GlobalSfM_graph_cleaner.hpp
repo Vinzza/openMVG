@@ -107,6 +107,7 @@ typedef std::vector< Cycle > Cycles;
 //////////////////////////////////////////////////////////////////////////////// 
 
 typedef lemon::ListGraph Graph;
+typedef std::set<Pair> Tree;
 
 
 class GlobalSfM_Graph_Cleaner
@@ -141,6 +142,7 @@ class GlobalSfM_Graph_Cleaner
 	std::cout << " (" << p.first << "," << p.second << ") ";      
 	CohenrenceMap[p] = count; count+=1; }  // Initialisation of conherencMap
       std::cout << "\ninitialisation end\n" << std::endl;
+      
     }
   ////////// // // /  /    /       /          /       /    /  / // // //////////
       
@@ -150,7 +152,7 @@ class GlobalSfM_Graph_Cleaner
   //                              MISCELLANEOUS                               //
   ////////// // // /  /    /       /          /       /    /  / // // //////////
   // Display for TikZ
-    void disp_graph(const string str);
+    void disp_graph(const string str) const;
       
   ////////// // // /  /    /       /          /       /    /  / // // //////////
   //                              DEBUG FUNCTION                              //
@@ -180,7 +182,7 @@ class GlobalSfM_Graph_Cleaner
   ////////// // // /  /    /       /          /       /    /  / // // //////////
   //                             PRIVATE FONCTION                             //    
   ////////// // // /  /    /       /          /       /    /  / // // //////////
-  private:
+  //private: TODO TODO TODO TODO
     // Relative transformation Map
     RelativeInfo_Map relatives_Rt;
     // Conherence Map code the cohenrent set of edges. 
@@ -224,15 +226,9 @@ class GlobalSfM_Graph_Cleaner
     //                                 TREES                                  //
     ////////////////////////////////////////////////////////////////////////////
 	  
-    typedef std::set<Pair> Tree;
 
-    Tree generate_Random_Tree( const Graph & g, const int size ) const{
-      Tree tree;
-      // TODO
-      return tree;
-    };
-
-    double tree_consistency_error( const Tree & t, const RelativeInfo_Map & relatives_Rt ) const;
+    Tree generate_Random_Tree( const int size ) const;
+    double tree_consistency_error( const Tree & t ) const;
     
       
   ////////// // // /  /    /       /          /       /    /  / // // //////////
