@@ -22,18 +22,26 @@ using namespace openMVG::rotation_averaging;
 //                                    Run                                     //
 ////////////////////////////////////////////////////////////////////////////////
 
-RelativeInfo_Map GlobalSfM_Graph_Cleaner::Run()
+RelativeInfo_Map GlobalSfM_Graph_Cleaner::run()
 {
-  Cycles cycles = FindCycles();
-  RotationRejection(5.0f, cycles);
+  
+  Tree test_tree = generate_Consistent_Tree(10);
+  update_Consistency( test_tree );
+  for (globalSfM::Tree::const_iterator iter = test_tree.begin(); iter != test_tree.end(); ++iter)
+    std::cout << "(" << iter->first << "," << iter->second << ") ";
+  std::cout << std::endl;
+  
+  Cycles cycles = findCycles();
+  rotationRejection(5.0f, cycles);
   return relatives_Rt;
-}
+  
+} // function run
 
 ////////////////////////////////////////////////////////////////////////////////
 //                                Find Cycles                                 //
 ////////////////////////////////////////////////////////////////////////////////
 
-Cycles GlobalSfM_Graph_Cleaner::FindCycles() {
+Cycles GlobalSfM_Graph_Cleaner::findCycles() {
   Pair_Set pair_set;
   for(RelativeInfo_Map::const_iterator iter = relatives_Rt.begin(); iter != relatives_Rt.end(); ++iter)
       pair_set.insert(iter->first);
@@ -52,14 +60,14 @@ Cycles GlobalSfM_Graph_Cleaner::FindCycles() {
     vec_cycles.push_back(Cycle(cycle_cst));
   }
   return vec_cycles;
-}
+} // function findCycles
   
 ////////////////////////////////////////////////////////////////////////////////
 //                             Rotation Rejection                             //
 ////////////////////////////////////////////////////////////////////////////////
 ///  Reject edges of the view graph that do not produce triplets with tiny
 ///  angular error once rotation composition have been computed.
-void GlobalSfM_Graph_Cleaner::RotationRejection(const double max_angular_error,
+void GlobalSfM_Graph_Cleaner::rotationRejection(const double max_angular_error,
 						Cycles & vec_cycles)
 {
     
@@ -110,7 +118,7 @@ void GlobalSfM_Graph_Cleaner::RotationRejection(const double max_angular_error,
   }
   const size_t edges_end_count = map_relatives_validated.size();
   std::cout << "\n #Edges removed by triplet inference: " << edges_start_count - edges_end_count << std::endl;
-} // function RotationRejection
+} // function rotationRejection
   
 
 
@@ -118,58 +126,54 @@ void GlobalSfM_Graph_Cleaner::RotationRejection(const double max_angular_error,
 //                               MISCELLANEOUS                                //
 ////////////////////////////////////////////////////////////////////////////////
 
-void GlobalSfM_Graph_Cleaner::disp_graph(const string str) const {
-  for (Graph::NodeIt iter(g); iter!=lemon::INVALID; ++iter){
-    Vec3 foo = position_GroundTruth[nodeMapIndex.at(iter)];
-    std::cout << "\\node[n" << str << "] at (" << foo(0) <<  ","<< foo(2) << ")" << " (" << nodeMapIndex.at(iter) << ") " << "{" << nodeMapIndex.at(iter) << "}; ";
-  }
-  std::cout << std::endl;
-/*  
-  for(Adjacency_map::iterator iter = adjacency_map.begin();
-      iter != adjacency_map.end(); ++iter) {
-    IndexT s = iter->first;
-    std::set<IndexT> & indexT_set = iter->second;
-  
-    for (std::set<IndexT>::iterator iterT = indexT_set.begin();
-	 iterT != indexT_set.end(); ++iterT) {
-      IndexT t = *iterT;
+  void GlobalSfM_Graph_Cleaner::disp_Graph(const string str) const {
+    for (Graph::NodeIt iter(g); iter!=lemon::INVALID; ++iter){
+      Vec3 foo = position_GroundTruth[nodeMapIndex.at(iter)];
+      std::cout << "\\node[n" << str << "] at (" << foo(0) <<  ","<< foo(2) << ")" << " (" << nodeMapIndex.at(iter) << ") " << "{" << nodeMapIndex.at(iter) << "}; ";
+    }
+    std::cout << std::endl;
+  /*  
+    for(Adjacency_map::iterator iter = adjacency_map.begin();
+	iter != adjacency_map.end(); ++iter) {
+      IndexT s = iter->first;
+      std::set<IndexT> & indexT_set = iter->second;
+    
+      for (std::set<IndexT>::iterator iterT = indexT_set.begin();
+	  iterT != indexT_set.end(); ++iterT) {
+	IndexT t = *iterT;
+	if (s < t) {
+	  if (CohenrenceMap.find(std::make_pair(s,t)) != CohenrenceMap.end())
+	    std::cout << "\\draw[e" << str << " = " << CohenrenceMap.at(std::make_pair(s,t)) << "] (" << s << ") -- (" << t << "); ";
+	  else
+	    std::cout << "\\draw[e" << str << " = " << CohenrenceMap.at(std::make_pair(t,s)) << "] (" << s << ") -- (" << t << "); ";
+	}
+      }  
+    }*/
+    
+    for (Graph::ArcIt edge(g); edge!=lemon::INVALID; ++edge){
+      IndexT s = nodeMapIndex.at(g.source(edge));    IndexT t = nodeMapIndex.at(g.target(edge));
       if (s < t) {
 	if (CohenrenceMap.find(std::make_pair(s,t)) != CohenrenceMap.end())
-	  std::cout << "\\draw[e" << str << " = " << CohenrenceMap.at(std::make_pair(s,t)) << "] (" << s << ") -- (" << t << "); ";
+	  std::cout << "\\zdraw["<< str << "][" << CohenrenceMap.at(std::make_pair(s,t)) << "] (" << s << ") -- (" << t << "); ";
 	else
-	  std::cout << "\\draw[e" << str << " = " << CohenrenceMap.at(std::make_pair(t,s)) << "] (" << s << ") -- (" << t << "); ";
+	  std::cout << "\\zdraw["<< str << "][" << CohenrenceMap.at(std::make_pair(t,s)) << "] (" << s << ") -- (" << t << "); ";
       }
-    }  
-  }*/
-  
-  for (Graph::ArcIt edge(g); edge!=lemon::INVALID; ++edge){
-    IndexT s = nodeMapIndex.at(g.source(edge));    IndexT t = nodeMapIndex.at(g.target(edge));
-    if (s < t) {
-      if (CohenrenceMap.find(std::make_pair(s,t)) != CohenrenceMap.end())
-	std::cout << "\\zdraw["<< str << "][" << CohenrenceMap.at(std::make_pair(s,t)) << "] (" << s << ") -- (" << t << "); ";
-      else
-	std::cout << "\\zdraw["<< str << "][" << CohenrenceMap.at(std::make_pair(t,s)) << "] (" << s << ") -- (" << t << "); ";
     }
-  }
-  std::cout << "\n----------------------------------------------------" << std::endl;
-}
+    std::cout << "\n----------------------------------------------------" << std::endl;
+  } // function disp_Graph
 
-  
-  
+    
+    
 ////////////////////////////////////////////////////////////////////////////////
 //                                   TREES                                    //
 ////////////////////////////////////////////////////////////////////////////////
   
   // typedef std::set<Pair> Tree;
      
-    
-  double GlobalSfM_Graph_Cleaner::tree_consistency_error(const Tree & tree) const {
-    // Local 'Global' transformation to speedup the computation
-    std::map<IndexT,std::pair<Mat3,Vec3>> globalTransformation;
-    double consistency_error = 0;
-    
-    ////////// // // /  /    /       /          /       /    /  / // // //////////
-    //             Computation of the Local 'Global' Transformation             //
+  void GlobalSfM_Graph_Cleaner::sequential_Tree_Reconstruction(
+	const Tree & tree,
+	std::map<IndexT,std::pair<Mat3,Vec3>> & globalTransformation) const{    
+
     std::list<IndexT> markedIndexT; // (TODO)-> : list<Pair> : the edges we still need to use
     // root initialisation
     IndexT root = tree.begin()->first;
@@ -220,7 +224,17 @@ void GlobalSfM_Graph_Cleaner::disp_graph(const string str) const {
       }
       markedIndexT.pop_front();
     }
-    ////////// // // /  /    /       /          /       /    /  / // // //////////
+  } // function sequential_Tree_Reconstruction
+    
+  double GlobalSfM_Graph_Cleaner::tree_Consistency_Error(const Tree & tree, int & nbpos, int & nbneg) const {
+    // Local 'Global' transformation to speedup the computation
+    double consistency_error = 0; nbpos = 0; nbneg = 0;
+    std::pair<Mat3,Vec3> p_i;    Vec3 t_i;    Mat3 R_i;
+    
+    //             Computation of the Local 'Global' Transformation             //
+    std::map<IndexT,std::pair<Mat3,Vec3>> globalTransformation;
+    sequential_Tree_Reconstruction(tree, globalTransformation);
+    
     //                      Compute the consistency error                       //
     for(RelativeInfo_Map::const_iterator iter = relatives_Rt.begin();
 	iter != relatives_Rt.end(); ++iter) {
@@ -234,13 +248,17 @@ void GlobalSfM_Graph_Cleaner::disp_graph(const string str) const {
 	p_i = globalTransformation.at(rel.first.second);
 	R_i = R_i * p_i.first.transpose();
 	// R_i ==  R_s * R'_f^T * R'_f * R'_s^T == (R_s * R_f^T) * (R'_s * R'_f^T)^T
-
-	consistency_error += R2D(getRotationMagnitude(R_i));
-	std::cout << "(" << rel.first.first << "," << rel.first.second << ") : "<< R2D(getRotationMagnitude(R_i)) << " " << std::endl;
+	const double error = R2D(getRotationMagnitude(R_i));
+	consistency_error += error;
+	if (error < 5.)
+	  nbpos += 1;
+	else
+	  nbneg += 1;
+	//std::cout << "(" << rel.first.first << "," << rel.first.second << ") : "<< error << " " << std::endl;
       }
     }
     return consistency_error;
-  }
+  } // function tree_Consistency_Error
   
   Tree GlobalSfM_Graph_Cleaner::generate_Random_Tree( const int size ) const{
     // Assertion
@@ -282,7 +300,68 @@ void GlobalSfM_Graph_Cleaner::disp_graph(const string str) const {
       }
     }
     return tree;
-  }
+  } // function generate_Random_Tree
   
+  Tree GlobalSfM_Graph_Cleaner::generate_Consistent_Tree( const int size ) const {
+    // TODO : make ACRANSAC
+    const int nb_iter = 1000;
+    Tree best_tree;
+    double tree_err, err;
+    double best_error = 10000.;
+    
+    int nbpos, nbneg;    
+    for( int foo = 1; foo < nb_iter; foo++ ){
+      globalSfM::Tree tree_i = generate_Random_Tree(size);
+      tree_err = tree_Consistency_Error( tree_i, nbpos, nbneg );
+      err = tree_err * (nbneg + 1)/(nbpos+1); // <-(TODO)
+      
+      if( err < best_error ){
+	best_tree = tree_i;
+	best_error = err;
+	std::cout << foo << "- error: " << err << "(" << tree_err << " : " << nbpos << "/" << nbneg << ")" << std::endl;
+      }
+    }
+    return best_tree;
+  } // generate_Consistent_Tree
+  
+  void GlobalSfM_Graph_Cleaner::update_Consistency( const Tree & tree ) {
+    std::pair<Mat3,Vec3> p_i;    Vec3 t_i;    Mat3 R_i;
+    std::map<IndexT,std::pair<Mat3,Vec3>> globalTransformation;
+    sequential_Tree_Reconstruction(tree, globalTransformation);
+    
+    Pair ref_pair = *tree.begin();
+    
+    for(RelativeInfo_Map::const_iterator iter = relatives_Rt.begin();
+	iter != relatives_Rt.end(); ++iter) {
+      const openMVG::relativeInfo & rel = *iter;
+      if ( globalTransformation.find(rel.first.first) != globalTransformation.end()
+	  && globalTransformation.find(rel.first.second) != globalTransformation.end()) {
+	
+	R_i = rel.second.first; // R_i == R_(first -> second) == R_s * R_f^T
+	p_i = globalTransformation.at(rel.first.first);
+	R_i = R_i * p_i.first;  // R_i == R_s * R'_f^T * R'_f
+	p_i = globalTransformation.at(rel.first.second);
+	R_i = R_i * p_i.first.transpose();
+	// R_i ==  R_s * R'_f^T * R'_f * R'_s^T == (R_s * R_f^T) * (R'_s * R'_f^T)^T
+      
+	const double error = R2D(getRotationMagnitude(R_i));
+	if (error < 5.)	{change_consistency( rel.first, ref_pair );}
+      }
+    }
+    
+  } // function update_Consistency
+  
+  
+  double GlobalSfM_Graph_Cleaner::edge_Consistency_Error( const Pair & pair, const Tree & tree ) const{
+    std::map< IndexT, int > distance;
+    
+    for(Tree::const_iterator iter = tree.begin(); iter != tree.end(); ++iter) {
+      distance[iter->first] = 0;
+      distance[iter->second] = 0;
+    }
+    
+    return 0.;
+  } // function edge_Consistency_Error
+    
 } // namespace globalSfM
 } // namespace openMVG

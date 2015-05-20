@@ -141,7 +141,7 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Process() {
    // 2 - Relative Rotation Inference
   {
     globalSfM::GlobalSfM_Graph_Cleaner graph_cleaner(_relatives_Rt);
-    RelativeInfo_Map old_relatives_Rt = graph_cleaner.Run();
+    RelativeInfo_Map old_relatives_Rt = graph_cleaner.run();
     old_relatives_Rt.swap(_relatives_Rt);
   }
   Log_Display_graph("cleaned graph",_relatives_Rt); // GRAPH DISPLAY

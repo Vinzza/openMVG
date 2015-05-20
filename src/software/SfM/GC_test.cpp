@@ -90,18 +90,8 @@ int main(int argc, char **argv)
   globalSfM::GlobalSfM_Graph_Cleaner graph_cleaner(map_relative);
   graph_cleaner.set_position_groundtruth(C_global);
   std::cout << "-----------------------------------------------------------\nDisplay" << std::endl;
-  RelativeInfo_Map old_relatives_Rt = graph_cleaner.Run();
-  graph_cleaner.disp_graph("base");
-  
-  std::cout << "\nRANDOM TREE" << std::endl;
-  globalSfM::Tree test_tree = graph_cleaner.generate_Random_Tree(10);
-  
-  for (globalSfM::Tree::const_iterator iter = test_tree.begin(); iter != test_tree.end(); ++iter)
-    std::cout << "(" << iter->first << ") -> (" << iter->second << ")" << std::endl;
-  
-  double tree_err = graph_cleaner.tree_consistency_error( test_tree );
-  std::cout << "error: " << tree_err << std::endl;
-  
+  RelativeInfo_Map old_relatives_Rt = graph_cleaner.run();
+  graph_cleaner.disp_Graph("base");
   
   std::cout << " Total time took (s): " << timer.elapsed() << std::endl;
 

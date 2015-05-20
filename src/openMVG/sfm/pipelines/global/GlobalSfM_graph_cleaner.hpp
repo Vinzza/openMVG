@@ -146,13 +146,13 @@ class GlobalSfM_Graph_Cleaner
     }
   ////////// // // /  /    /       /          /       /    /  / // // //////////
       
-    RelativeInfo_Map Run();
+    RelativeInfo_Map run();
     
   ////////// // // /  /    /       /          /       /    /  / // // //////////
   //                              MISCELLANEOUS                               //
   ////////// // // /  /    /       /          /       /    /  / // // //////////
   // Display for TikZ
-    void disp_graph(const string str) const;
+    void disp_Graph(const string str) const;
       
   ////////// // // /  /    /       /          /       /    /  / // // //////////
   //                              DEBUG FUNCTION                              //
@@ -161,7 +161,7 @@ class GlobalSfM_Graph_Cleaner
       position_GroundTruth = v;
     }
       
-    void change_consistency( const int a, const int b ){
+    void change_consistency( const int a, const int b ){ // TODO : improve speed
       if ( a != b ) {
 	for (std::map<Pair,int>::iterator iter = CohenrenceMap.begin(); iter != CohenrenceMap.end();  ++iter) {
 	  if ( iter->second == a ) { iter->second = b; }
@@ -206,9 +206,9 @@ class GlobalSfM_Graph_Cleaner
     
   ////////// // // /  /    /       /          /       /    /  / // // //////////
     
-    Cycles FindCycles();
+    Cycles findCycles();
     
-    void RotationRejection(const double max_angular_error, Cycles & vec_cycles);    
+    void rotationRejection(const double max_angular_error, Cycles & vec_cycles);    
     
     void addCycleToMap( Cycle & c, RelativeInfo_Map & relatives_Rt_new ){
       for ( std::vector<Pair>::iterator iter = c.cycle.begin(); iter != c.cycle.end(); ++iter ){
@@ -225,10 +225,21 @@ class GlobalSfM_Graph_Cleaner
     ////////////////////////////////////////////////////////////////////////////
     //                                 TREES                                  //
     ////////////////////////////////////////////////////////////////////////////
-	  
+
 
     Tree generate_Random_Tree( const int size ) const;
-    double tree_consistency_error( const Tree & t ) const;
+    void sequential_Tree_Reconstruction(
+		const Tree & tree,
+		std::map<IndexT,std::pair<Mat3,Vec3>> & globalTransformation) const;
+    double tree_Consistency_Error( const Tree & tree, int & nbpos, int & nbneg ) const;
+    
+    Tree generate_Consistent_Tree( const int size ) const;
+
+    void update_Consistency( const Tree & tree );
+    
+    double edge_Consistency_Error( const Pair & pair, const Tree & tree ) const;
+    
+    void increase_Tree( Tree & tree ) {} // TODO
     
       
   ////////// // // /  /    /       /          /       /    /  / // // //////////
