@@ -26,10 +26,12 @@ RelativeInfo_Map GlobalSfM_Graph_Cleaner::run()
 {
   
   Tree test_tree = generate_Consistent_Tree(10);
-  update_Consistency( test_tree );
+  update_Cohenrence( test_tree );
   for (globalSfM::Tree::const_iterator iter = test_tree.begin(); iter != test_tree.end(); ++iter)
     std::cout << "(" << iter->first << "," << iter->second << ") ";
   std::cout << std::endl;
+
+  std::cout << "-----------------------------------------------------------\nTriplets Inference" << std::endl;
   
   Cycles cycles = findCycles();
   rotationRejection(5.0f, cycles);
@@ -94,7 +96,7 @@ void GlobalSfM_Graph_Cleaner::rotationRejection(const double max_angular_error,
       vec_cycle_validated.push_back(cycle);
       addCycleToMap( cycle, map_relatives_validated );
       for (int i = 0; i < cycle.cycle.size()-1; ++i) {
-	change_consistency(cycle.cycle[i], cycle.cycle[i+1]);
+	change_Cohenrence(cycle.cycle[i], cycle.cycle[i+1]);
       }
     }
   }
@@ -172,15 +174,15 @@ void GlobalSfM_Graph_Cleaner::rotationRejection(const double max_angular_error,
      
   void GlobalSfM_Graph_Cleaner::sequential_Tree_Reconstruction(
 	const Tree & tree,
-	std::map<IndexT,std::pair<Mat3,Vec3>> & globalTransformation) const{    
+	std::map<IndexT,Transformation> & globalTransformation) const{    
 
     std::list<IndexT> markedIndexT; // (TODO)-> : list<Pair> : the edges we still need to use
     // root initialisation
     IndexT root = tree.begin()->first;
     markedIndexT.push_back(root);
-    std::pair<Mat3,Vec3> p_i;
+    Transformation T_i;
     Vec3 t_i;    t_i << 0.,0.,0.;
-    Mat3 R_i = Mat3::Identity();
+    const Mat3 R_i = Mat3::Identity();
     globalTransformation[root] = std::make_pair(R_i, t_i);
         
     while (!markedIndexT.empty()){
@@ -188,37 +190,13 @@ void GlobalSfM_Graph_Cleaner::rotationRejection(const double max_angular_error,
       for (Tree::iterator iter = tree.begin(); iter != tree.end(); ++iter) {
 	IndexT a = iter->first;	IndexT b = iter->second;
 	if (s == a && globalTransformation.find(b) == globalTransformation.end()){
-	  // Extract local transformation for (s -> b)
-	  if (relatives_Rt.find(std::make_pair(s,b)) != relatives_Rt.end()) {
-	    p_i = relatives_Rt.at(std::make_pair(s,b));
-	    R_i = p_i.first;			t_i = p_i.second; }
-	  else {
-	    p_i = relatives_Rt.at(std::make_pair(b,s));
-	    R_i = p_i.first.transpose();	t_i = p_i.second; }
-
-	  // Extract global transformation of (s)
-	  p_i = globalTransformation.at(s);
-	  t_i = R_i * p_i.second + t_i;       // Global transformation of (b)
-	  R_i = R_i * p_i.first;              // Global transformation of (b)
-	    
-	  globalTransformation[b] = std::make_pair(R_i, t_i);
+	  T_i = get_transformation(std::make_pair(s,b));
+	  globalTransformation[b] = compose_transformation( T_i , globalTransformation.at(s) );
 	  markedIndexT.push_back(b);
-	  
-	} else if(s == b && globalTransformation.find(a) == globalTransformation.end()) {	  
-	  // Extract local transformation for (s -> a)
-	  if (relatives_Rt.find(std::make_pair(s,a)) != relatives_Rt.end()) {
-	    p_i = relatives_Rt.at(std::make_pair(s,a));
-	    R_i = p_i.first;			t_i = p_i.second; }
-	  else {
-	    p_i = relatives_Rt.at(std::make_pair(a,s));
-	    R_i = p_i.first.transpose();	t_i = p_i.second; }
 
-	  // Extract global transformation of (s)
-	  p_i = globalTransformation.at(s);
-	  t_i = R_i * p_i.second + t_i;       // Global transformation of (a)
-	  R_i = R_i * p_i.first;              // Global transformation of (a)
-	    
-	  globalTransformation[a] = std::make_pair(R_i, t_i);
+	} else if(s == b && globalTransformation.find(a) == globalTransformation.end()) {
+	  T_i = get_transformation(std::make_pair(s,a));
+	  globalTransformation[a] = compose_transformation( T_i , globalTransformation.at(s) );
 	  markedIndexT.push_back(a);
 	}
       }
@@ -228,11 +206,11 @@ void GlobalSfM_Graph_Cleaner::rotationRejection(const double max_angular_error,
     
   double GlobalSfM_Graph_Cleaner::tree_Consistency_Error(const Tree & tree, int & nbpos, int & nbneg) const {
     // Local 'Global' transformation to speedup the computation
-    double consistency_error = 0; nbpos = 0; nbneg = 0;
-    std::pair<Mat3,Vec3> p_i;    Vec3 t_i;    Mat3 R_i;
+    double consistency_error = 0.; nbpos = 0; nbneg = 0;
+    Transformation p_i;    Vec3 t_i;    Mat3 R_i;
     
     //             Computation of the Local 'Global' Transformation             //
-    std::map<IndexT,std::pair<Mat3,Vec3>> globalTransformation;
+    std::map<IndexT,Transformation> globalTransformation;
     sequential_Tree_Reconstruction(tree, globalTransformation);
     
     //                      Compute the consistency error                       //
@@ -324,9 +302,9 @@ void GlobalSfM_Graph_Cleaner::rotationRejection(const double max_angular_error,
     return best_tree;
   } // generate_Consistent_Tree
   
-  void GlobalSfM_Graph_Cleaner::update_Consistency( const Tree & tree ) {
-    std::pair<Mat3,Vec3> p_i;    Vec3 t_i;    Mat3 R_i;
-    std::map<IndexT,std::pair<Mat3,Vec3>> globalTransformation;
+  void GlobalSfM_Graph_Cleaner::update_Cohenrence( const Tree & tree ) {
+    Transformation p_i;    Vec3 t_i;    Mat3 R_i;
+    std::map<IndexT,Transformation> globalTransformation;
     sequential_Tree_Reconstruction(tree, globalTransformation);
     
     Pair ref_pair = *tree.begin();
@@ -345,22 +323,92 @@ void GlobalSfM_Graph_Cleaner::rotationRejection(const double max_angular_error,
 	// R_i ==  R_s * R'_f^T * R'_f * R'_s^T == (R_s * R_f^T) * (R'_s * R'_f^T)^T
       
 	const double error = R2D(getRotationMagnitude(R_i));
-	if (error < 5.)	{change_consistency( rel.first, ref_pair );}
+	if (error < 5.)	{change_Cohenrence( rel.first, ref_pair );}
       }
     }
     
-  } // function update_Consistency
+  } // function update_Cohenrence
   
   
-  double GlobalSfM_Graph_Cleaner::edge_Consistency_Error( const Pair & pair, const Tree & tree ) const{
+  double GlobalSfM_Graph_Cleaner::edge_Consistency_Error(
+	      const Pair & pair,
+	      const Tree & tree,
+	      const std::set<IndexT> & tree_nodes,
+	      int & nbpos,
+	      int & nbneg) const{
+    double consistency_error = 0.;
+    nbneg = nbpos = 0;
     std::map< IndexT, int > distance;
+    std::list<IndexT> markedIndexT;
+    IndexT new_node, tree_node; // new_node is the node in pair which is not in tree_nodes.
+    if(tree_nodes.find(pair.first) != tree_nodes.end() && tree_nodes.find(pair.second) == tree_nodes.end()) {
+      new_node = pair.second;
+      tree_node = pair.first;
+    }
+    else if (tree_nodes.find(pair.second) != tree_nodes.end() && tree_nodes.find(pair.first) == tree_nodes.end()) {
+      new_node = pair.first;
+      tree_node = pair.second;
+    }
+    else
+      throw "The increasing edge must link the tree and the other part of the graph.";
     
-    for(Tree::const_iterator iter = tree.begin(); iter != tree.end(); ++iter) {
-      distance[iter->first] = 0;
-      distance[iter->second] = 0;
+    // Computation of the distance to the tree (without the node new_node)
+    for(std::set<IndexT>::const_iterator iter = tree_nodes.begin(); iter != tree_nodes.end(); ++iter) {
+      distance[*iter] = 0;
+      markedIndexT.push_back(*iter);
+    }
+    while (!markedIndexT.empty()){
+      IndexT s = markedIndexT.front();
+      const std::set<IndexT> adj_s = adjacency_map.at(s);      
+      for(std::set<IndexT>::const_iterator iter = adj_s.begin(); iter != adj_s.end(); ++iter) {
+	IndexT t = *iter;
+	if( distance.find(t) == distance.end() && t != new_node ) {
+	  distance[t] = distance.at(s)+1;
+	  markedIndexT.push_back(t);
+	}
+      }      
+      markedIndexT.pop_front();
     }
     
-    return 0.;
+    std::map<IndexT,Transformation> globalTransformation;
+    sequential_Tree_Reconstruction(tree, globalTransformation);
+
+    Transformation T_pair = get_transformation(pair);
+    Transformation T_pt;
+    
+    // For every edge starting from new_node, we find a shortest path that go
+    // back to the tree and we estimate the lack of consistency for this path.
+    const std::set<IndexT> adj_newnode = adjacency_map.at(new_node);
+    for(std::set<IndexT>::const_iterator iter = adj_newnode.begin(); iter != adj_newnode.end(); ++iter) {
+      IndexT s = new_node;	IndexT t = *iter;
+      if( distance[t] != 0 ){ // t is not in the tree
+	T_pt = compose_transformation(get_transformation(std::make_pair(s, t)), T_pair);
+
+	// build the track back to the tree
+	while ( distance[t] != 0 ) {
+	  const std::set<IndexT> adj_t = adjacency_map.at(s);
+	  for(std::set<IndexT>::const_iterator iter_s = adj_t.begin(); iter_s != adj_t.end(); ++iter_s) {
+	    if( t != new_node && distance.at(*iter_s) < distance.at(t) ){  // lazy evaluation important : distance[new_node] doesn't exist...
+	      s = t;
+	      t = *iter_s;
+	      T_pt = compose_transformation(get_transformation(std::make_pair(s, t)), T_pt);
+	      break;
+	    }
+	  }
+	}
+	// here, t belongs to the tree.
+	T_pt = compose_transformation( inverse_transformation(globalTransformation.at(t)) ,T_pt );
+	T_pt = compose_transformation( globalTransformation.at(tree_node) ,T_pt );
+	const double error = R2D(getRotationMagnitude(T_pt.first));
+	consistency_error += error;
+	if (error < 5.)
+	  nbpos += 1;
+	else
+	  nbneg += 1;
+      }
+    }
+    
+    return consistency_error;
   } // function edge_Consistency_Error
     
 } // namespace globalSfM

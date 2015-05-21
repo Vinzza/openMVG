@@ -108,10 +108,43 @@ typedef std::vector< Cycle > Cycles;
 
 typedef lemon::ListGraph Graph;
 typedef std::set<Pair> Tree;
+typedef std::pair<Mat3, Vec3> Transformation;
 
 
 class GlobalSfM_Graph_Cleaner
-{
+{  /*
+  CONSTRUCTORS:
+    GlobalSfM_Graph_Cleaner( RelativeInfo_Map )
+
+  UTILS:
+    inverse_transformation( T ) : return the inverse of the transformation
+    get_transformation( Pair ) : return the local transformation of the Pair    
+    compose_transformation( T1, T2 ) : return the composition : T1 o T2
+    
+    change_Cohenrence( int, int )
+    - - - - - - - - -( Pair, Pair ) : set the two Pair to the same consistent value
+    update_Cohenrence( tree ) : update the CohenrenceMap
+                     
+    sequential_Tree_Reconstruction( tree, globalTransformation ) : build the globalTransformation sequentially with the tree
+    
+  PROCESS:
+    run() : run the cleaning process
+    
+    addCycleToMap( Cycle, RelativeInfo_Map ) : add the cycle to the RelativeInfo_Map
+    findCycles() : return a vector of Cycles (only triplets for now)
+    rotationRejection( max_angular_error, Cycles ) : keep only the edges which are in a consistent cycle.
+    
+    generate_Random_Tree( size(int) ) : return a random tree with a given size
+    tree_Consistency_Error( tree, nbpos, nbneg ) : return the error and set nbneg/nbpos to the number of incoherent/coherent cycles.
+    generate_Consistent_Tree( size(int) ) : return a consistent tree with a given size
+    edge_Consistency_Error( pair, tree, tree_nodes  ) : return the consistency error made by the pair according to the tree
+    increase_Tree( tree ) : add a consistent edge to the tree
+    
+  DEBUG:
+    set_position_groundtruth( vector<Vect3> ) : set the groundtruth for the disp_Graph function
+    disp_Graph( string ) : display the graph in a TikZ format               
+    
+  */
   public:
     
   ////////// // // /  /    /       /          /       /    /  / // // //////////
@@ -161,22 +194,22 @@ class GlobalSfM_Graph_Cleaner
       position_GroundTruth = v;
     }
       
-    void change_consistency( const int a, const int b ){ // TODO : improve speed
+    void change_Cohenrence( const int a, const int b ){ // TODO : improve speed
       if ( a != b ) {
 	for (std::map<Pair,int>::iterator iter = CohenrenceMap.begin(); iter != CohenrenceMap.end();  ++iter) {
 	  if ( iter->second == a ) { iter->second = b; }
 	}
       }
     }
-    void change_consistency( const Pair a, const Pair b ){
+    void change_Cohenrence( const Pair a, const Pair b ){
       int ca;
       if (CohenrenceMap.find(a) != CohenrenceMap.end())	{ ca = CohenrenceMap.at(a); }
       else { ca = CohenrenceMap.at(std::make_pair(a.second, a.first)); }
 
       if (CohenrenceMap.find(b) != CohenrenceMap.end())
-	change_consistency( ca, CohenrenceMap.at(b));
+	change_Cohenrence( ca, CohenrenceMap.at(b));
       else
-	change_consistency( ca, CohenrenceMap.at(std::make_pair(b.second, b.first)));
+	change_Cohenrence( ca, CohenrenceMap.at(std::make_pair(b.second, b.first)));
     }
     
   ////////// // // /  /    /       /          /       /    /  / // // //////////
@@ -199,10 +232,28 @@ class GlobalSfM_Graph_Cleaner
     // Adjacency map
     typedef std::map<IndexT, std::set<IndexT>> Adjacency_map;
     Adjacency_map adjacency_map;
-    
-    
+        
     // debug
     std::vector<Vec3> position_GroundTruth;
+    
+    
+  ////////// // // /  /    /       /          /       /    /  / // // //////////
+    
+    Transformation inverse_transformation( const Transformation & T ) const{
+	return std::make_pair( T.first.transpose(), - T.first.transpose()*T.second );
+    }
+    
+    Transformation get_transformation( const Pair & pair ) const{
+      if (relatives_Rt.find(pair) != relatives_Rt.end())
+	return relatives_Rt.at(pair);
+      else
+	return inverse_transformation(relatives_Rt.at( make_pair(pair.second,pair.first) ));
+    }
+    
+    Transformation compose_transformation( const Transformation & T1,
+					   const Transformation & T2 ) const{
+      return std::make_pair( T1.first * T2.first, T1.first * T2.second + T1.second);
+    }
     
   ////////// // // /  /    /       /          /       /    /  / // // //////////
     
@@ -230,14 +281,14 @@ class GlobalSfM_Graph_Cleaner
     Tree generate_Random_Tree( const int size ) const;
     void sequential_Tree_Reconstruction(
 		const Tree & tree,
-		std::map<IndexT,std::pair<Mat3,Vec3>> & globalTransformation) const;
+		std::map<IndexT,Transformation> & globalTransformation) const;
     double tree_Consistency_Error( const Tree & tree, int & nbpos, int & nbneg ) const;
     
     Tree generate_Consistent_Tree( const int size ) const;
 
-    void update_Consistency( const Tree & tree );
+    void update_Cohenrence( const Tree & tree );
     
-    double edge_Consistency_Error( const Pair & pair, const Tree & tree ) const;
+    double edge_Consistency_Error( const Pair & pair, const Tree & tree, const std::set<IndexT> & tree_nodes, int & nbpos, int & nbneg  ) const;
     
     void increase_Tree( Tree & tree ) {} // TODO
     

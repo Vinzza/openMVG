@@ -86,10 +86,11 @@ int main(int argc, char **argv)
       total_edge -= 1;
     }
   }
-  
+    
   globalSfM::GlobalSfM_Graph_Cleaner graph_cleaner(map_relative);
   graph_cleaner.set_position_groundtruth(C_global);
-  std::cout << "-----------------------------------------------------------\nDisplay" << std::endl;
+  std::cout << "-----------------------------------------------------------\n---- Cleaning Graph" << std::endl;
+  std::cout << "-----------------------------------------------------------" << std::endl;
   RelativeInfo_Map old_relatives_Rt = graph_cleaner.run();
   graph_cleaner.disp_Graph("base");
   
