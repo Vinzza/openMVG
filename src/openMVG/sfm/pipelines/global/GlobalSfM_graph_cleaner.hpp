@@ -123,7 +123,7 @@ class GlobalSfM_Graph_Cleaner
     
     change_Cohenrence( int, int )
     - - - - - - - - -( Pair, Pair ) : set the two Pair to the same consistent value
-    update_Cohenrence( tree ) : update the CohenrenceMap
+    update_Coherence( tree ) : update the CohenrenceMap
                      
     sequential_Tree_Reconstruction( tree, globalTransformation ) : build the globalTransformation sequentially with the tree
     
@@ -141,7 +141,8 @@ class GlobalSfM_Graph_Cleaner
     increase_Tree( tree ) : add a consistent edge to the tree
     
   DEBUG:
-    set_position_groundtruth( vector<Vect3> ) : set the groundtruth for the disp_Graph function
+    set_position_groundtruth( vector<Vect3> ) : set the position groundtruth for the disp_Graph function
+    set_wrong_edges( set<Pair> ) : set the groundtruth wrond_edges_set for the disp_Graph function
     disp_Graph( string ) : display the graph in a TikZ format               
     
   */
@@ -150,8 +151,8 @@ class GlobalSfM_Graph_Cleaner
   ////////// // // /  /    /       /          /       /    /  / // // //////////
   //                               CONSTRUCTORS                               //    
   ////////// // // /  /    /       /          /       /    /  / // // //////////
-    GlobalSfM_Graph_Cleaner(const RelativeInfo_Map & map_relat)
-    :relatives_Rt(map_relat) {
+    GlobalSfM_Graph_Cleaner(const RelativeInfo_Map & map_relat, const double & error_thres = 5.)
+    :relatives_Rt(map_relat), error_thres(error_thres) {
       // Build SetNodes
       std::set<IndexT> setNodes;
       std::cout << "Graph initialisation:" << std::endl;
@@ -176,6 +177,7 @@ class GlobalSfM_Graph_Cleaner
 	CohenrenceMap[p] = count; count+=1; }  // Initialisation of conherencMap
       std::cout << "\ninitialisation end\n" << std::endl;
       
+      dbtalk = false;
     }
   ////////// // // /  /    /       /          /       /    /  / // // //////////
       
@@ -184,16 +186,7 @@ class GlobalSfM_Graph_Cleaner
   ////////// // // /  /    /       /          /       /    /  / // // //////////
   //                              MISCELLANEOUS                               //
   ////////// // // /  /    /       /          /       /    /  / // // //////////
-  // Display for TikZ
-    void disp_Graph(const string str) const;
-      
-  ////////// // // /  /    /       /          /       /    /  / // // //////////
-  //                              DEBUG FUNCTION                              //
-  ////////// // // /  /    /       /          /       /    /  / // // //////////
-    void set_position_groundtruth( const std::vector<Vec3> & v ){
-      position_GroundTruth = v;
-    }
-      
+    
     void change_Cohenrence( const int a, const int b ){ // TODO : improve speed
       if ( a != b ) {
 	for (std::map<Pair,int>::iterator iter = CohenrenceMap.begin(); iter != CohenrenceMap.end();  ++iter) {
@@ -210,6 +203,23 @@ class GlobalSfM_Graph_Cleaner
 	change_Cohenrence( ca, CohenrenceMap.at(b));
       else
 	change_Cohenrence( ca, CohenrenceMap.at(std::make_pair(b.second, b.first)));
+    }
+      
+  ////////// // // /  /    /       /          /       /    /  / // // //////////
+  //                              DEBUG FUNCTION                              //
+  ////////// // // /  /    /       /          /       /    /  / // // //////////
+    bool dbtalk;
+    std::vector<Vec3> position_GroundTruth;
+    std::set<Pair> wrong_edges;
+    
+  // Display for TikZ
+    void disp_Graph(const string str) const;
+    
+    void set_position_groundtruth( const std::vector<Vec3> & v ){
+      position_GroundTruth = v;
+    }
+    void set_wrong_edges( const std::set<Pair> & s ){
+      wrong_edges = s;
     }
     
   ////////// // // /  /    /       /          /       /    /  / // // //////////
@@ -232,10 +242,9 @@ class GlobalSfM_Graph_Cleaner
     // Adjacency map
     typedef std::map<IndexT, std::set<IndexT>> Adjacency_map;
     Adjacency_map adjacency_map;
-        
-    // debug
-    std::vector<Vec3> position_GroundTruth;
     
+    //
+    double error_thres;
     
   ////////// // // /  /    /       /          /       /    /  / // // //////////
     
@@ -286,11 +295,11 @@ class GlobalSfM_Graph_Cleaner
     
     Tree generate_Consistent_Tree( const int size ) const;
 
-    void update_Cohenrence( const Tree & tree );
+    void update_Coherence( const Tree & tree );
     
     double edge_Consistency_Error( const Pair & pair, const Tree & tree, const std::set<IndexT> & tree_nodes, int & nbpos, int & nbneg  ) const;
     
-    void increase_Tree( Tree & tree ) {} // TODO
+    void increase_Tree( Tree & tree ) const;
     
       
   ////////// // // /  /    /       /          /       /    /  / // // //////////
