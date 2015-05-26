@@ -9,6 +9,10 @@
 #include "ceres/rotation.h"
 
 namespace openMVG {
+namespace sfm {
+
+using namespace openMVG::cameras;
+using namespace openMVG::geometry;
 
 /// Create the appropriate cost functor according the provided input camera intrinsic model
 ceres::CostFunction * IntrinsicsToCostFunction(IntrinsicBase * intrinsic, const Vec2 & observation)
@@ -34,7 +38,8 @@ ceres::CostFunction * IntrinsicsToCostFunction(IntrinsicBase * intrinsic, const 
 
 
 Bundle_Adjustment_Ceres::BA_options::BA_options(const bool bVerbose, bool bmultithreaded)
-  :_bVerbose(bVerbose)
+  :_bVerbose(bVerbose),
+   _nbThreads(1)
 {
   #ifdef OPENMVG_USE_OPENMP
     _nbThreads = omp_get_max_threads();
@@ -257,5 +262,6 @@ bool Bundle_Adjustment_Ceres::Adjust(
   }
 }
 
+} // namespace sfm
 } // namespace openMVG
 

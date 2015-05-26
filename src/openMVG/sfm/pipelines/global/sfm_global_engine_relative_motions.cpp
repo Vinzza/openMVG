@@ -1,4 +1,5 @@
 
+
 // Copyright (c) 2015 Pierre MOULON.
 
 // This Source Code Form is subject to the terms of the Mozilla Public
@@ -12,6 +13,7 @@
 #include "openMVG/multiview/triangulation_nview.hpp"
 #include "openMVG/graph/connectedComponent.hpp"
 #include "openMVG/system/timer.hpp"
+#include "openMVG/stl/stl.hpp"
 #include "openMVG/multiview/essential.hpp"
 
 #include "openMVG/sfm/pipelines/global/GlobalSfM_graph_cleaner.hpp"
@@ -23,6 +25,11 @@
 #endif
 
 namespace openMVG{
+namespace sfm{
+
+using namespace openMVG::cameras;
+using namespace openMVG::geometry;
+using namespace openMVG::features;
 
 ////////////////////////////////////////////////////////////////////////////////
 //                               CONSTRUCTEURS                                //
@@ -44,12 +51,12 @@ GlobalSfMReconstructionEngine_RelativeMotions::GlobalSfMReconstructionEngine_Rel
 
     _htmlDocStream->pushInfo( "Dataset info:");
     _htmlDocStream->pushInfo( "Views count: " +
-      htmlDocument::toString( sfm_data.getViews().size()) + "<br>");
+      htmlDocument::toString( sfm_data.GetViews().size()) + "<br>");
   }
 
   // Set default motion Averaging methods
-  _eRotationAveragingMethod = globalSfM::ROTATION_AVERAGING_L2;
-  _eTranslationAveragingMethod = globalSfM::TRANSLATION_AVERAGING_L1;
+  _eRotationAveragingMethod = ROTATION_AVERAGING_L2;
+  _eTranslationAveragingMethod = TRANSLATION_AVERAGING_L1;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -76,8 +83,8 @@ void GlobalSfMReconstructionEngine_RelativeMotions::SetFeaturesProvider(Features
     iter != _normalized_features_provider->feats_per_view.end(); ++iter)
   {
     // get the related view & camera intrinsic and compute the corresponding bearing vectors
-    const View * view = _sfm_data.getViews().at(iter->first).get();
-    const std::shared_ptr<IntrinsicBase> cam = _sfm_data.getIntrinsics().find(view->id_intrinsic)->second;
+    const View * view = _sfm_data.GetViews().at(iter->first).get();
+    const std::shared_ptr<IntrinsicBase> cam = _sfm_data.GetIntrinsics().find(view->id_intrinsic)->second;
     for (PointFeatures::iterator iterPt = iter->second.begin();
       iterPt != iter->second.end(); ++iterPt)
     {
@@ -99,7 +106,7 @@ void GlobalSfMReconstructionEngine_RelativeMotions::SetMatchesProvider(Matches_P
 
 void GlobalSfMReconstructionEngine_RelativeMotions::SetRotationAveragingMethod
 (
-  globalSfM::ERotationAveragingMethod eRotationAveragingMethod
+  ERotationAveragingMethod eRotationAveragingMethod
 )
 {
   _eRotationAveragingMethod = eRotationAveragingMethod;
@@ -109,7 +116,7 @@ void GlobalSfMReconstructionEngine_RelativeMotions::SetRotationAveragingMethod
 
 void GlobalSfMReconstructionEngine_RelativeMotions::SetTranslationAveragingMethod
 (
-  globalSfM::ETranslationAveragingMethod eTranslationAveragingMethod
+  ETranslationAveragingMethod eTranslationAveragingMethod
 )
 {
   _eTranslationAveragingMethod = eTranslationAveragingMethod;
@@ -125,7 +132,7 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Process() {
   //-------------------
   {
     const Pair_Set pairs = _matches_provider->getPairs();
-    const std::set<IndexT> set_remainingIds = graphUtils::CleanGraph_KeepLargestBiEdge_Nodes<Pair_Set, IndexT>(pairs, _sOutDirectory);
+    const std::set<IndexT> set_remainingIds = graph::CleanGraph_KeepLargestBiEdge_Nodes<Pair_Set, IndexT>(pairs, _sOutDirectory);
     if(set_remainingIds.empty())
     {
       std::cout << "Invalid input image graph for global SfM" << std::endl;
@@ -138,7 +145,7 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Process() {
   // 1 - Compute relative rotations (and translation)
   Compute_Relative_Rotations(_relatives_Rt);
   
-   // 2 - Relative Rotation Inference
+  // 2 - Relative Rotation Inference
   {
     globalSfM::GlobalSfM_Graph_Cleaner graph_cleaner(_relatives_Rt);
     RelativeInfo_Map old_relatives_Rt = graph_cleaner.run();
@@ -185,10 +192,10 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Process() {
 
     os.str("");
     os << "-------------------------------" << "<br>"
-      << "-- View count: " << _sfm_data.getViews().size() << "<br>"
-      << "-- Intrinsic count: " << _sfm_data.getIntrinsics().size() << "<br>"
-      << "-- Pose count: " << _sfm_data.getPoses().size() << "<br>"
-      << "-- Track count: "  << _sfm_data.getLandmarks().size() << "<br>"
+      << "-- View count: " << _sfm_data.GetViews().size() << "<br>"
+      << "-- Intrinsic count: " << _sfm_data.GetIntrinsics().size() << "<br>"
+      << "-- Pose count: " << _sfm_data.GetPoses().size() << "<br>"
+      << "-- Track count: "  << _sfm_data.GetLandmarks().size() << "<br>"
       << "-------------------------------" << "<br>";
     _htmlDocStream->pushInfo(os.str());
   }
@@ -273,14 +280,39 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Compute_Global_Rotations()
   }
 
   // Global Rotation solver:
-  using namespace openMVG::globalSfM;
-  globalSfM::ERelativeRotationInferenceMethod eRelativeRotationInferenceMethod = globalSfM::TRIPLET_ROTATION_INFERENCE_COMPOSITION_ERROR;
+  ERelativeRotationInferenceMethod eRelativeRotationInferenceMethod = TRIPLET_ROTATION_INFERENCE_COMPOSITION_ERROR;
 
-  globalSfM::GlobalSfM_Rotation_AveragingSolver rotation_averaging_solver;
+  GlobalSfM_Rotation_AveragingSolver rotation_averaging_solver;
   const bool bRotationAveraging = rotation_averaging_solver.Run(
     _eRotationAveragingMethod, eRelativeRotationInferenceMethod,
     vec_relativeRotEstimate, _map_globalR);
 
+  if (bRotationAveraging)
+  {
+    // Log input graph to the HTML report
+    if (!_sLoggingFile.empty() && !_sOutDirectory.empty())
+    {
+      // List the plausible remaining edges
+      std::set<IndexT> set_ViewIds;
+        std::transform(_sfm_data.GetViews().begin(), _sfm_data.GetViews().end(),
+          std::inserter(set_ViewIds, set_ViewIds.begin()), stl::RetrieveKey());
+      const std::string sGraph_name = "global_rotation_graph";
+      graph::indexedGraph putativeGraph(set_ViewIds, rotation_averaging_solver.GetUsedPairs());
+      graph::exportToGraphvizData(
+        stlplus::create_filespec(_sOutDirectory, sGraph_name),
+        putativeGraph.g);
+
+      using namespace htmlDocument;
+      std::ostringstream os;
+
+      os << "<br>" << sGraph_name << "<br>"
+         << "<img src=\""
+         << stlplus::create_filespec(_sOutDirectory, sGraph_name, "svg")
+         << "\" height=\"600\">\n";
+
+      _htmlDocStream->pushInfo(os.str());
+    }
+  }
   return bRotationAveraging;
 }
 
@@ -292,7 +324,7 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Compute_Global_Rotations()
 bool GlobalSfMReconstructionEngine_RelativeMotions::Compute_Global_Translations()
 {
   // Translation averaging (compute translations & update them to a global common coordinates system)
-  globalSfM::GlobalSfM_Translation_AveragingSolver translation_averaging_solver;
+  GlobalSfM_Translation_AveragingSolver translation_averaging_solver;
   const bool bTranslationAveraging = translation_averaging_solver.Run(
     _eTranslationAveragingMethod,
     _sfm_data,
@@ -379,14 +411,14 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Compute_Initial_Structure()
   {
     IndexT countRemoved = 0;
 
-    openMVG::Timer timer;
+    openMVG::system::Timer timer;
 
-    const IndexT trackCountBefore = _sfm_data.getLandmarks().size();
+    const IndexT trackCountBefore = _sfm_data.GetLandmarks().size();
     SfM_Data_Structure_Computation_Blind structure_estimator(true);
     structure_estimator.triangulate(_sfm_data);
 
     std::cout << "\n#removed tracks (invalid triangulation): " <<
-      IndexT(_sfm_data.getLandmarks().size()) - trackCountBefore << std::endl;
+      trackCountBefore - IndexT(_sfm_data.GetLandmarks().size()) << std::endl;
     std::cout << std::endl << "  Triangulation took (s): " << timer.elapsed() << std::endl;
 
     // Export initial structure
@@ -510,8 +542,8 @@ void GlobalSfMReconstructionEngine_RelativeMotions::Compute_Relative_Rotations(R
     const View * view_J = _sfm_data.views[J].get();
 
     // Check that valid camera are existing for the pair index
-    if (_sfm_data.getIntrinsics().find(view_I->id_intrinsic) == _sfm_data.getIntrinsics().end() ||
-      _sfm_data.getIntrinsics().find(view_J->id_intrinsic) == _sfm_data.getIntrinsics().end())
+    if (_sfm_data.GetIntrinsics().find(view_I->id_intrinsic) == _sfm_data.GetIntrinsics().end() ||
+      _sfm_data.GetIntrinsics().find(view_J->id_intrinsic) == _sfm_data.GetIntrinsics().end())
       continue;
 
     const IndMatches & vec_matchesInd = _matches_provider->_pairWise_matches.find(current_pair)->second;
@@ -523,8 +555,8 @@ void GlobalSfMReconstructionEngine_RelativeMotions::Compute_Relative_Rotations(R
       x2.col(k) = _normalized_features_provider->feats_per_view[J][vec_matchesInd[k]._j].coords().cast<double>();
     }
 
-    const IntrinsicBase * cam_I = _sfm_data.getIntrinsics().at(view_I->id_intrinsic).get();
-    const IntrinsicBase * cam_J = _sfm_data.getIntrinsics().at(view_J->id_intrinsic).get();
+    const IntrinsicBase * cam_I = _sfm_data.GetIntrinsics().at(view_I->id_intrinsic).get();
+    const IntrinsicBase * cam_J = _sfm_data.GetIntrinsics().at(view_J->id_intrinsic).get();
     if ( !isValid(cam_I->getType()) || !isValid(cam_J->getType()))
     {
       continue;
@@ -553,10 +585,10 @@ void GlobalSfMReconstructionEngine_RelativeMotions::Compute_Relative_Rotations(R
     {
       // Refine the defined scene
       SfM_Data tiny_scene;
-      tiny_scene.views.insert(*_sfm_data.getViews().find(view_I->id_view));
-      tiny_scene.views.insert(*_sfm_data.getViews().find(view_J->id_view));
-      tiny_scene.intrinsics.insert(*_sfm_data.getIntrinsics().find(view_I->id_intrinsic));
-      tiny_scene.intrinsics.insert(*_sfm_data.getIntrinsics().find(view_J->id_intrinsic));
+      tiny_scene.views.insert(*_sfm_data.GetViews().find(view_I->id_view));
+      tiny_scene.views.insert(*_sfm_data.GetViews().find(view_J->id_view));
+      tiny_scene.intrinsics.insert(*_sfm_data.GetIntrinsics().find(view_I->id_intrinsic));
+      tiny_scene.intrinsics.insert(*_sfm_data.GetIntrinsics().find(view_J->id_intrinsic));
 
       // Init poses
       const Pose3 & Pose_I = tiny_scene.poses[view_I->id_pose] = Pose3(Mat3::Identity(), Vec3::Zero());
@@ -616,6 +648,27 @@ void GlobalSfMReconstructionEngine_RelativeMotions::Compute_Relative_Rotations(R
       //  relativePose_info.relativePose.translation());
     }
   }
+  // Log input graph to the HTML report
+  if (!_sLoggingFile.empty() && !_sOutDirectory.empty())
+  {
+    std::set<IndexT> set_ViewIds;
+      std::transform(_sfm_data.GetViews().begin(), _sfm_data.GetViews().end(),
+        std::inserter(set_ViewIds, set_ViewIds.begin()), stl::RetrieveKey());
+    graph::indexedGraph putativeGraph(set_ViewIds, getPairs(_matches_provider->_pairWise_matches));
+    graph::exportToGraphvizData(
+      stlplus::create_filespec(_sOutDirectory, "input_largest_cc_relative_motions_graph"),
+      putativeGraph.g);
+
+    using namespace htmlDocument;
+    std::ostringstream os;
+
+    os << "<br>" << "input_largest_cc_relative_motions_graph" << "<br>"
+       << "<img src=\""
+       << stlplus::create_filespec(_sOutDirectory, "input_largest_cc_relative_motions_graph", "svg")
+       << "\" height=\"600\">\n";
+
+    _htmlDocStream->pushInfo(os.str());
+  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -663,4 +716,6 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Log_Display_graph( const std
   }
 }
 
+} // namespace sfm
 } // namespace openMVG
+

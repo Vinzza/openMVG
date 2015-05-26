@@ -20,6 +20,7 @@
 namespace openMVG {
 
 using namespace openMVG::matching;
+using namespace openMVG::features;
 
 Matcher_Regions_AllInMemory::Matcher_Regions_AllInMemory(
   float distRatio, EMatcherType eMatcherType)
@@ -104,9 +105,7 @@ void Template_Matcher(
     ( matcher10.Build(tabI, regions_countI, regionsI->DescriptorLength()) );
 
     const std::vector<size_t> & indexToCompare = iter->second;
-#ifdef OPENMVG_USE_OPENMP
-#pragma omp parallel for schedule(dynamic)
-#endif
+
     for (int j = 0; j < (int)indexToCompare.size(); ++j)
     {
       const size_t J = indexToCompare[j];
@@ -146,9 +145,6 @@ void Template_Matcher(
       IndMatchDecorator<float> matchDeduplicator(vec_FilteredMatches, pointFeaturesI, pointFeaturesJ);
       matchDeduplicator.getDeduplicated(vec_FilteredMatches);
 
-#ifdef OPENMVG_USE_OPENMP
-#pragma omp critical
-#endif
       {
         ++my_progress_bar;
         if (!vec_FilteredMatches.empty())

@@ -110,6 +110,12 @@ ADD_EXECUTABLE(openMVG_main_exportTracks main_exportTracks.cpp)
 TARGET_LINK_LIBRARIES(openMVG_main_exportTracks
                      ${OpenMVG_LIBS})
 
+# - Export undistorted images related to a sfm_data file
+#
+ADD_EXECUTABLE(openMVG_main_ExportUndistortedImages main_ExportUndistortedImages.cpp)
+TARGET_LINK_LIBRARIES(openMVG_main_ExportUndistortedImages
+                     ${OpenMVG_LIBS})
+
 # installation rules
 SET_PROPERTY(TARGET openMVG_main_exportKeypoints PROPERTY FOLDER OpenMVG/software)
 INSTALL(TARGETS openMVG_main_exportKeypoints DESTINATION bin/)
@@ -117,6 +123,8 @@ SET_PROPERTY(TARGET openMVG_main_exportMatches PROPERTY FOLDER OpenMVG/software)
 INSTALL(TARGETS openMVG_main_exportMatches DESTINATION bin/)
 SET_PROPERTY(TARGET openMVG_main_exportTracks PROPERTY FOLDER OpenMVG/software)
 INSTALL(TARGETS openMVG_main_exportTracks DESTINATION bin/)
+SET_PROPERTY(TARGET openMVG_main_ExportUndistortedImages PROPERTY FOLDER OpenMVG/software)
+INSTALL(TARGETS openMVG_main_ExportUndistortedImages DESTINATION bin/)
 
 ###
 # SfM export to X
@@ -210,7 +218,11 @@ INSTALL(TARGETS GC_test DESTINATION bin/)
 # Export tutorial with valid path thanks to a configuration file
 ##
 SET(OPENMVG_SOFTWARE_SFM_SRC_DIR ${CMAKE_CURRENT_LIST_DIR})
-SET(OPENMVG_SOFTWARE_SFM_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR})
+IF(MSVC OR APPLE)
+  SET(OPENMVG_SOFTWARE_SFM_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE}")
+ELSE()
+  SET(OPENMVG_SOFTWARE_SFM_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR})
+ENDIF()
 SET(OPENMVG_TUTORIAL_IN_FILE "${CMAKE_CURRENT_LIST_DIR}/tutorial_demo.py.in")
 CONFIGURE_FILE(${OPENMVG_TUTORIAL_IN_FILE}
     "${CMAKE_CURRENT_BINARY_DIR}/tutorial_demo.py" @ONLY)

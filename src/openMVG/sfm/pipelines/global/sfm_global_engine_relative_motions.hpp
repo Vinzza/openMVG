@@ -14,6 +14,7 @@
 #include "third_party/htmlDoc/htmlDoc.hpp"
 
 namespace openMVG{
+namespace sfm{
 
 /// Global SfM Pipeline Reconstruction Engine.
 /// - Method: Global Fusion of Relative Motions.
@@ -31,8 +32,8 @@ public:
   void SetFeaturesProvider(Features_Provider * provider);
   void SetMatchesProvider(Matches_Provider * provider);
 
-  void SetRotationAveragingMethod(globalSfM::ERotationAveragingMethod eRotationAveragingMethod);
-  void SetTranslationAveragingMethod(globalSfM::ETranslationAveragingMethod _eTranslationAveragingMethod);
+  void SetRotationAveragingMethod(ERotationAveragingMethod eRotationAveragingMethod);
+  void SetTranslationAveragingMethod(ETranslationAveragingMethod _eTranslationAveragingMethod);
 
   virtual bool Process();
 
@@ -65,8 +66,8 @@ private:
   bool Log_Display_graph( const std::string graph_name, const RelativeInfo_Map & relatives_Rt );
 
   // Parameter
-  globalSfM::ERotationAveragingMethod _eRotationAveragingMethod;
-  globalSfM::ETranslationAveragingMethod _eTranslationAveragingMethod;
+  ERotationAveragingMethod _eRotationAveragingMethod;
+  ETranslationAveragingMethod _eTranslationAveragingMethod;
 
   //-- Data provider
   Features_Provider  * _features_provider;
@@ -81,6 +82,7 @@ private:
 
 };
 
+} // namespace sfm
 } // namespace openMVG
 
 #endif // OPENMVG_SFM_GLOBAL_ENGINE_RELATIVE_MOTIONS_HPP
