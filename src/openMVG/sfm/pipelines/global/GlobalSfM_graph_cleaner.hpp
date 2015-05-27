@@ -108,8 +108,42 @@ typedef std::vector< Cycle > Cycles;
 
 typedef lemon::ListGraph Graph;
 typedef std::set<Pair> Tree;
-typedef std::pair<Mat3, Vec3> Transformation;
+typedef std::pair<Mat3, Vec3> Transformationz;
 
+struct Transformation {
+public:
+
+  Transformation():R(Mat3::Identity()),t(Vec3::Zero()),length(0) {}
+  Transformation(std::pair<Mat3,Vec3> np): R(np.first), t(np.second), length(1) {}
+  Transformation(Mat3 nr, Vec3 nt, int nl): R(nr), t(nt), length(nl) {}
+
+  // Constructor for the inverse transformation
+  Transformation(std::pair<Mat3,Vec3> np, string foo): R(np.first.transpose()), t(- np.first.transpose()*np.second), length(1) {}
+
+  Mat3 R;
+  Vec3 t;
+  int length;  
+  
+  void compose_left( const Transformation & T ){
+    R = T.R * R;    t = T.R * t + T.t;    length = length + T.length;
+  }
+  void compose_left( const std::pair<Mat3, Vec3> & T ){
+    R = T.first * R;    t = T.first * t + T.second;    length = length + 1;
+  }
+  void compose_right( const Transformation & T ){
+    R = R * T.R;    t = R * T.t + t;    length = length + T.length;
+  }
+  void compose_right( const std::pair<Mat3, Vec3> & T ){
+    R = R * T.first;    t = R * T.second + t;    length = length + 1;
+  }
+  void compose_left_rev( const Transformation & T ){
+    R = T.R.transpose() * R;    t = T.R.transpose() * (t - T.t);    length = length + T.length;
+  }
+  
+  double error(){
+    return R2D(getRotationMagnitude(R));
+  }
+};
 
 class GlobalSfM_Graph_Cleaner
 {  /*
@@ -262,19 +296,19 @@ class GlobalSfM_Graph_Cleaner
   ////////// // // /  /    /       /          /       /    /  / // // //////////
     
     Transformation inverse_transformation( const Transformation & T ) const{
-	return std::make_pair( T.first.transpose(), - T.first.transpose()*T.second );
+	return Transformation( T.R.transpose(), - T.R.transpose()*T.t, T.length );
     }
     
     Transformation get_transformation( const Pair & pair ) const{
       if (relatives_Rt.find(pair) != relatives_Rt.end())
-	return relatives_Rt.at(pair);
+	return Transformation(relatives_Rt.at(pair));
       else
-	return inverse_transformation(relatives_Rt.at( make_pair(pair.second,pair.first) ));
+	return Transformation(relatives_Rt.at( make_pair(pair.second,pair.first) ), "inverse");
     }
     
     Transformation compose_transformation( const Transformation & T1,
 					   const Transformation & T2 ) const{
-      return std::make_pair( T1.first * T2.first, T1.first * T2.second + T1.second);
+      return Transformation( T1.R * T2.R, T1.R * T2.t + T1.t, T1.length + T2.length );
     }
     
   ////////// // // /  /    /       /          /       /    /  / // // //////////

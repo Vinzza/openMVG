@@ -185,9 +185,11 @@ void GlobalSfM_Graph_Cleaner::rotationRejection(const double max_angular_error,
     IndexT root = tree.begin()->first;
     markedIndexT.push_back(root);
     Transformation T_i;
-    Vec3 t_i;    t_i << 0.,0.,0.;
-    const Mat3 R_i = Mat3::Identity();
-    globalTransformation[root] = std::make_pair(R_i, t_i);
+    globalTransformation[root] = T_i;
+    
+    //Vec3 t_i;    t_i << 0.,0.,0.;
+    //const Mat3 R_i = Mat3::Identity();    
+    //globalTransformation[root] = std::make_pair(R_i, t_i);
         
     while (!markedIndexT.empty()){
       IndexT s = markedIndexT.front();
@@ -195,12 +197,16 @@ void GlobalSfM_Graph_Cleaner::rotationRejection(const double max_angular_error,
 	IndexT a = iter->first;	IndexT b = iter->second;
 	if (s == a && globalTransformation.find(b) == globalTransformation.end()){
 	  T_i = get_transformation(std::make_pair(s,b));
-	  globalTransformation[b] = compose_transformation( T_i , globalTransformation.at(s) );
+	  T_i.compose_right( globalTransformation.at(s) );
+	  globalTransformation[b] = T_i;      // <-(TODO:L)
+	  //globalTransformation[b] = compose_transformation( T_i , globalTransformation.at(s) );
 	  markedIndexT.push_back(b);
 
 	} else if(s == b && globalTransformation.find(a) == globalTransformation.end()) {
 	  T_i = get_transformation(std::make_pair(s,a));
-	  globalTransformation[a] = compose_transformation( T_i , globalTransformation.at(s) );
+	  T_i.compose_right( globalTransformation.at(s) );
+	  globalTransformation[a] = T_i;      // <-(TODO:L)
+	  //globalTransformation[a] = compose_transformation( T_i , globalTransformation.at(s) );
 	  markedIndexT.push_back(a);
 	}
       }
@@ -208,12 +214,14 @@ void GlobalSfM_Graph_Cleaner::rotationRejection(const double max_angular_error,
     }
   } // function sequential_Tree_Reconstruction
   
+
+  
 ////////////////////////////////////////////////////////////////////////////////
     
   double GlobalSfM_Graph_Cleaner::tree_Consistency_Error(const Tree & tree, int & nbpos, int & nbneg) const {
     // Local 'Global' transformation to speedup the computation
     double consistency_error = 0.; nbpos = 0; nbneg = 0;
-    Transformation p_i;    Vec3 t_i;    Mat3 R_i;
+    Transformation T_i;//    Vec3 t_i;    Mat3 R_i;
     
     //             Computation of the Local 'Global' Transformation             //
     std::map<IndexT,Transformation> globalTransformation;
@@ -226,13 +234,19 @@ void GlobalSfM_Graph_Cleaner::rotationRejection(const double max_angular_error,
       if ( globalTransformation.find(rel.first.first) != globalTransformation.end()
 	  && globalTransformation.find(rel.first.second) != globalTransformation.end()
 	  && tree.find(rel.first) == tree.end()) {
-	R_i = rel.second.first; // R_i == R_(first -> second) == R_s * R_f^T
-	p_i = globalTransformation.at(rel.first.first);
-	R_i = R_i * p_i.first;  // R_i == R_s * R'_f^T * R'_f
-	p_i = globalTransformation.at(rel.first.second);
-	R_i = R_i * p_i.first.transpose();
+
+	T_i = globalTransformation.at(rel.first.first);
+	T_i.compose_left(rel.second);
+	T_i.compose_left_rev( globalTransformation.at(rel.first.second) );
+	//R_i = rel.second.first; // R_i == R_(first -> second) == R_s * R_f^T
+	//T_i = globalTransformation.at(rel.first.first);
+	//R_i = R_i * T_i.first;  // R_i == R_s * R'_f^T * R'_f
+	//T_i = globalTransformation.at(rel.first.second);
+	//R_i = R_i * T_i.first.transpose();
 	// R_i ==  R_s * R'_f^T * R'_f * R'_s^T == (R_s * R_f^T) * (R'_s * R'_f^T)^T
-	const double error = R2D(getRotationMagnitude(R_i));
+
+	const double error = T_i.error();
+	//const double error = R2D(getRotationMagnitude(R_i));
 	consistency_error += error;
 	if (error < error_thres)
 	  nbpos += 1;
@@ -315,7 +329,7 @@ void GlobalSfM_Graph_Cleaner::rotationRejection(const double max_angular_error,
 ////////////////////////////////////////////////////////////////////////////////
   
   void GlobalSfM_Graph_Cleaner::update_Coherence( const Tree & tree ) {
-    Transformation p_i;    Vec3 t_i;    Mat3 R_i;
+    Transformation T_i;    Vec3 t_i;    Mat3 R_i;
     std::map<IndexT,Transformation> globalTransformation;
     sequential_Tree_Reconstruction(tree, globalTransformation);
     
@@ -327,14 +341,17 @@ void GlobalSfM_Graph_Cleaner::rotationRejection(const double max_angular_error,
       if ( globalTransformation.find(rel.first.first) != globalTransformation.end()
 	  && globalTransformation.find(rel.first.second) != globalTransformation.end()) {
 	
-	R_i = rel.second.first; // R_i == R_(first -> second) == R_s * R_f^T
-	p_i = globalTransformation.at(rel.first.first);
-	R_i = R_i * p_i.first;  // R_i == R_s * R'_f^T * R'_f
-	p_i = globalTransformation.at(rel.first.second);
-	R_i = R_i * p_i.first.transpose();
+	T_i = globalTransformation.at(rel.first.first);
+	T_i.compose_left(rel.second);
+	T_i.compose_left_rev( globalTransformation.at(rel.first.second) );
+	//R_i = rel.second.first; // R_i == R_(first -> second) == R_s * R_f^T
+	//T_i = globalTransformation.at(rel.first.first);
+	//R_i = R_i * T_i.first;  // R_i == R_s * R'_f^T * R'_f
+	//T_i = globalTransformation.at(rel.first.second);
+	//R_i = R_i * T_i.first.transpose();
 	// R_i ==  R_s * R'_f^T * R'_f * R'_s^T == (R_s * R_f^T) * (R'_s * R'_f^T)^T
       
-	const double error = R2D(getRotationMagnitude(R_i));
+	const double error = T_i.error(); //R2D(getRotationMagnitude(R_i));
 	if (error < error_thres)	{change_Cohenrence( rel.first, ref_pair );}
       }
     }
@@ -354,11 +371,11 @@ void GlobalSfM_Graph_Cleaner::rotationRejection(const double max_angular_error,
     double foo_error;    
     
     if(dbtalk){std::cout << "(" << t;} // DBTALK
-    
     if( distance.at(t) == 0 ){
-      T = compose_transformation( inverse_transformation(globalTransformation.at(t)) ,T );
-      error = R2D(getRotationMagnitude(T.first));
-      if(dbtalk){std::cout << ":" << error << ")";} // DBTALK
+      T.compose_left_rev(globalTransformation.at(t));
+      // = compose_transformation( inverse_transformation(globalTransformation.at(t)) ,T );
+      error = T.error(); // R2D(getRotationMagnitude(T.first));
+      if(dbtalk){std::cout << ":" << error << "!" << T.length << ")";} // DBTALK
       if (error < error_thres)
 	nbpos_i += 1;
       else
