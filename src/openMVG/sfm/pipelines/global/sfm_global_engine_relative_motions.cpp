@@ -147,7 +147,7 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Process() {
   
   // 2 - Relative Rotation Inference
   {
-    globalSfM::GlobalSfM_Graph_Cleaner graph_cleaner(_relatives_Rt);
+    GlobalSfM_Graph_Cleaner graph_cleaner(_relatives_Rt);
     RelativeInfo_Map old_relatives_Rt = graph_cleaner.run();
     old_relatives_Rt.swap(_relatives_Rt);
   }
@@ -674,14 +674,14 @@ void GlobalSfMReconstructionEngine_RelativeMotions::Compute_Relative_Rotations(R
 ////////////////////////////////////////////////////////////////////////////////
 //                             Log Display Graph                              //
 ////////////////////////////////////////////////////////////////////////////////
-bool GlobalSfMReconstructionEngine_RelativeMotions::Log_Display_graph( const std::string graph_name, const graphUtils::indexedGraph & putativeGraph ){  
+bool GlobalSfMReconstructionEngine_RelativeMotions::Log_Display_graph( const std::string graph_name, const graph::indexedGraph & putativeGraph ){  
   if (!_sLoggingFile.empty())
   {
     std::cout << "Export Graph: " << graph_name << ".svg" << std::endl;
     if (!_sOutDirectory.empty())
     {
       // Save the graph after cleaning:
-      graphUtils::exportToGraphvizData(
+      graph::exportToGraphvizData(
 	stlplus::create_filespec(_sOutDirectory, graph_name),
 	putativeGraph.g);
     }
@@ -700,7 +700,7 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Log_Display_graph( const std
 bool GlobalSfMReconstructionEngine_RelativeMotions::Log_Display_graph( const std::string graph_name, const PairWiseMatches & map_matches ){  
   if (!_sLoggingFile.empty())
   {    
-    graphUtils::indexedGraph putativeGraph(getPairs(map_matches));
+    graph::indexedGraph putativeGraph(getPairs(map_matches));
     return GlobalSfMReconstructionEngine_RelativeMotions::Log_Display_graph(graph_name, putativeGraph);
   }
 }
@@ -711,7 +711,7 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Log_Display_graph( const std
     Pair_Set pairs;
     for(RelativeInfo_Map::const_iterator iter = relatives_Rt.begin(); iter != relatives_Rt.end(); ++iter)
       pairs.insert(iter->first);
-    graphUtils::indexedGraph putativeGraph(pairs);
+    graph::indexedGraph putativeGraph(pairs);
     return GlobalSfMReconstructionEngine_RelativeMotions::Log_Display_graph(graph_name, putativeGraph);
   }
 }

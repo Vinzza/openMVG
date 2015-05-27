@@ -23,8 +23,8 @@ using namespace openMVG;
 int main(int argc, char **argv)
 {
   using namespace std;
- 
-  openMVG::Timer timer;
+  
+  openMVG::system::Timer timer;
   
   
   int n_views = 20;
@@ -69,7 +69,7 @@ int main(int argc, char **argv)
   
   int total_edge = n_views * (n_views - 1) / 2;
   int n_total_edge = int( total_edge_p * total_edge );
-  int n_wrong_edges = int( wrong_edges_p * total_edge );  // 10%
+  int n_wrong_edges = int( wrong_edges_p * n_total_edge );  // 10%
   
   std::default_random_engine generator;
   std::uniform_real_distribution<double> unif_distrib(0.0,1.0);
@@ -129,13 +129,12 @@ int main(int argc, char **argv)
     }
   }
     
-  globalSfM::GlobalSfM_Graph_Cleaner graph_cleaner(map_relative, error_thres);
+  sfm::GlobalSfM_Graph_Cleaner graph_cleaner(map_relative, error_thres);
   graph_cleaner.set_position_groundtruth(C_global);
   graph_cleaner.set_wrong_edges(wrong_edges);
   std::cout << "-----------------------------------------------------------\n---- Cleaning Graph" << std::endl;
   std::cout << "-----------------------------------------------------------" << std::endl;
   RelativeInfo_Map old_relatives_Rt = graph_cleaner.run();
-  graph_cleaner.disp_Graph("base");
   
   std::cout << " Total time took (s): " << timer.elapsed() << std::endl;
 

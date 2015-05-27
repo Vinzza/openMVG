@@ -9,10 +9,10 @@
 
 
 namespace openMVG{
-namespace globalSfM{
+namespace sfm{
 
 
-} // namespace globalSfM
+} // namespace sfm
 } // namespace openMVG
 
 #include "openMVG/sfm/sfm.hpp"
@@ -22,7 +22,7 @@ namespace globalSfM{
 // #include <lemon/list_graph.h>
 
 namespace openMVG{
-namespace globalSfM{
+namespace sfm{
 
 ////////////////////////////////////////////////////////////////////////////////
 //                                   Cycle                                    //
@@ -124,6 +124,7 @@ class GlobalSfM_Graph_Cleaner
     change_Cohenrence( int, int )
     - - - - - - - - -( Pair, Pair ) : set the two Pair to the same consistent value
     update_Coherence( tree ) : update the CohenrenceMap
+    principale_Coherence() : return the int corresponding to the biggest coherent part
                      
     sequential_Tree_Reconstruction( tree, globalTransformation ) : build the globalTransformation sequentially with the tree
     
@@ -177,8 +178,20 @@ class GlobalSfM_Graph_Cleaner
 	CohenrenceMap[p] = count; count+=1; }  // Initialisation of conherencMap
       std::cout << "\ninitialisation end\n" << std::endl;
       
-      dbtalk = false;
+      // DEBUG
+      dbtalk = true;
+      tikzfile.open ("graphe.tex");
+      tikzfile << "\\documentclass[tikz]{standalone}\n"
+	       << "\\def\\zdraw[#1][#2][#3]{\\ifnum#2=\\componentchoice\\ifnum#3=1\\draw[tp]\\else\\draw[fp]\\fi\\else\\ifnum#3=1\\draw[fn]\\else\\draw[tn]\\fi\\fi}"
+	       << "\n\\begin{document}\n\\begin{tikzpicture}[\nscale=10,nbase/.style={circle,draw},\nbase/.style={thick},\ntp/.style={green!50!black,line width=.5},"
+	       << "\ntn/.style={red!50!black,line width=.5,opacity=.1},\nfp/.style={line width=1,red},\nfn/.style={line width=.5,green!50!black,dotted},"
+	       << "\ntree/.style={blue,line width=3,opacity=.3,dashed},\nitree/.style={blue!70!green,line width=3,opacity=.5,dashed}]\n";      
     }
+    
+    ~GlobalSfM_Graph_Cleaner(){
+      tikzfile << "\\end{tikzpicture}\n\\end{document}";
+      tikzfile.close();
+    };
   ////////// // // /  /    /       /          /       /    /  / // // //////////
       
     RelativeInfo_Map run();
@@ -194,6 +207,23 @@ class GlobalSfM_Graph_Cleaner
 	}
       }
     }
+    int principale_Coherence() const{ // TODO : improve speed
+      std::map<int,int> foo;
+      for (std::map<Pair,int>::const_iterator iter = CohenrenceMap.begin(); iter != CohenrenceMap.end();  ++iter) {
+	if( foo.find(iter->second) == foo.end() )
+	  foo[iter->second] = 1;
+	else
+	  foo[iter->second] = foo[iter->second] + 1;
+      }
+      int maxint=0, maxkey;
+      for (std::map<int,int>::iterator iter = foo.begin(); iter != foo.end();  ++iter) {
+	if( iter->second > maxint ){
+	  maxint = iter->second;
+	  maxkey = iter->first;
+	}
+      }
+      return maxkey;
+    }
     void change_Cohenrence( const Pair a, const Pair b ){
       int ca;
       if (CohenrenceMap.find(a) != CohenrenceMap.end())	{ ca = CohenrenceMap.at(a); }
@@ -203,23 +233,6 @@ class GlobalSfM_Graph_Cleaner
 	change_Cohenrence( ca, CohenrenceMap.at(b));
       else
 	change_Cohenrence( ca, CohenrenceMap.at(std::make_pair(b.second, b.first)));
-    }
-      
-  ////////// // // /  /    /       /          /       /    /  / // // //////////
-  //                              DEBUG FUNCTION                              //
-  ////////// // // /  /    /       /          /       /    /  / // // //////////
-    bool dbtalk;
-    std::vector<Vec3> position_GroundTruth;
-    std::set<Pair> wrong_edges;
-    
-  // Display for TikZ
-    void disp_Graph(const string str) const;
-    
-    void set_position_groundtruth( const std::vector<Vec3> & v ){
-      position_GroundTruth = v;
-    }
-    void set_wrong_edges( const std::set<Pair> & s ){
-      wrong_edges = s;
     }
     
   ////////// // // /  /    /       /          /       /    /  / // // //////////
@@ -297,16 +310,42 @@ class GlobalSfM_Graph_Cleaner
 
     void update_Coherence( const Tree & tree );
     
+    double edge_Descent_Error( const IndexT & t,
+	  Transformation T, const std::map< IndexT, int > & distance,
+	  const std::map<IndexT,Transformation> & globalTransformation,
+	  int & nbpos_i, int & nbneg_i) const;
     double edge_Consistency_Error( const Pair & pair, const Tree & tree, const std::set<IndexT> & tree_nodes, int & nbpos, int & nbneg  ) const;
     
     void increase_Tree( Tree & tree ) const;
     
-      
+  ////////// // // /  /    /       /          /       /    /  / // // //////////
+  //                              DEBUG FUNCTION                              //
+  ////////// // // /  /    /       /          /       /    /  / // // //////////
+    mutable bool dbtalk;
+    std::vector<Vec3> position_GroundTruth;
+    std::set<Pair> wrong_edges;
+    mutable ofstream tikzfile;
+    
+  // Display for TikZ
+    void disp_Graph(const string str) const;
+    
+  public:
+    
+    void set_position_groundtruth( const std::vector<Vec3> & v ){
+      position_GroundTruth = v;
+      for(Adjacency_map::const_iterator iter = adjacency_map.begin(); iter != adjacency_map.end(); ++iter) {
+	Vec3 foo = position_GroundTruth[iter->first];
+	tikzfile << "\\node[nbase] at (" << foo(0) <<  ","<< foo(2) << ")" << " (" << iter->first << ") " << "{" << iter->first << "};\n";
+      }
+    }
+    void set_wrong_edges( const std::set<Pair> & s ){
+      wrong_edges = s;
+    }
   ////////// // // /  /    /       /          /       /    /  / // // //////////
 };
 
 
-} // namespace globalSfM
+} // namespace sfm
 } // namespace openMVG
 
 #endif // GLOBALSFM_GRAPH_CLEANER_HPP

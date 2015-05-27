@@ -56,7 +56,6 @@ bool GlobalSfM_Rotation_AveragingSolver::Run(
       */
       
       Pair_Set pairs = getPairs(relativeRotations);
-      const std::set<IndexT> set_remainingIds = graphUtils::CleanGraph_KeepLargestBiEdge_Nodes<Pair_Set, IndexT>(pairs);
       const std::set<IndexT> set_remainingIds = graph::CleanGraph_KeepLargestBiEdge_Nodes<Pair_Set, IndexT>(pairs);
 
       if(set_remainingIds.empty())

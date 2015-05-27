@@ -61,7 +61,7 @@ private:
   // HTML logger
   std::shared_ptr<htmlDocument::htmlDocumentStream> _htmlDocStream;
   std::string _sLoggingFile;
-  bool Log_Display_graph( const std::string graph_name, const graphUtils::indexedGraph & putativeGraph );
+  bool Log_Display_graph( const std::string graph_name, const graph::indexedGraph & putativeGraph );
   bool Log_Display_graph( const std::string graph_name, const PairWiseMatches & map_matches );
   bool Log_Display_graph( const std::string graph_name, const RelativeInfo_Map & relatives_Rt );
 
