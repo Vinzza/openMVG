@@ -32,8 +32,10 @@ RelativeInfo_Map GlobalSfM_Graph_Cleaner::run()
     tikzfile << "\\draw[itree](" << iter->first << ")--(" << iter->second << ");"<<std::endl;}
     
   std::cout << "Enlargement of the tree..." << std::endl;  
-  increase_Tree( coherent_tree );  
+  increase_Tree( coherent_tree );
+  dbtalk = true;
   update_Coherence( coherent_tree );
+  dbtalk = false;
   
   tikzfile << "\n\\def\\componentchoice{" << principale_Coherence() << "}\n";
   disp_Graph("base");
@@ -236,7 +238,7 @@ void GlobalSfM_Graph_Cleaner::rotationRejection(const double max_angular_error,
 	  && tree.find(rel.first) == tree.end()) {
 
 	T_i = globalTransformation.at(rel.first.first);
-	T_i.compose_left(rel.second);
+	T_i.compose_left(rel.second, rel.first);
 	T_i.compose_left_rev( globalTransformation.at(rel.first.second) );
 	//R_i = rel.second.first; // R_i == R_(first -> second) == R_s * R_f^T
 	//T_i = globalTransformation.at(rel.first.first);
@@ -342,7 +344,7 @@ void GlobalSfM_Graph_Cleaner::rotationRejection(const double max_angular_error,
 	  && globalTransformation.find(rel.first.second) != globalTransformation.end()) {
 	
 	T_i = globalTransformation.at(rel.first.first);
-	T_i.compose_left(rel.second);
+	T_i.compose_left(rel.second, rel.first);
 	T_i.compose_left_rev( globalTransformation.at(rel.first.second) );
 	//R_i = rel.second.first; // R_i == R_(first -> second) == R_s * R_f^T
 	//T_i = globalTransformation.at(rel.first.first);
@@ -351,7 +353,8 @@ void GlobalSfM_Graph_Cleaner::rotationRejection(const double max_angular_error,
 	//R_i = R_i * T_i.first.transpose();
 	// R_i ==  R_s * R'_f^T * R'_f * R'_s^T == (R_s * R_f^T) * (R'_s * R'_f^T)^T
       
-	const double error = T_i.error(); //R2D(getRotationMagnitude(R_i));
+	const double error = T_i.error(); // R2D(getRotationMagnitude(R_i));
+	if(dbtalk){std::cout << "Erreur chemin = ";    for (std::list<IndexT>::const_iterator it=T_i.path.begin(); it!=T_i.path.end(); ++it){ std::cout << ' ' << *it;} std::cout << " : " << error << std::endl;}
 	if (error < error_thres)	{change_Cohenrence( rel.first, ref_pair );}
       }
     }
@@ -375,7 +378,10 @@ void GlobalSfM_Graph_Cleaner::rotationRejection(const double max_angular_error,
       T.compose_left_rev(globalTransformation.at(t));
       // = compose_transformation( inverse_transformation(globalTransformation.at(t)) ,T );
       error = T.error(); // R2D(getRotationMagnitude(T.first));
-      if(dbtalk){std::cout << ":" << error << "!" << T.length << ")";} // DBTALK
+      if(dbtalk){std::cout << ":" << error << "!";						// DBTALK
+	for (std::list<IndexT>::iterator it=T.path.begin(); it!=T.path.end(); ++it)		// DBTALK
+	  std::cout << ' ' << *it;								// DBTALK
+	std::cout << ")";}									// DBTALK
       if (error < error_thres)
 	nbpos_i += 1;
       else

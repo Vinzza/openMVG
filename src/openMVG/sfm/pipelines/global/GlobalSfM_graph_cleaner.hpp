@@ -101,49 +101,135 @@ struct Cycle
 
 
 typedef std::vector< Cycle > Cycles;
-  
-////////////////////////////////////////////////////////////////////////////////
-//                          Global SfM Graph Cleaner                          //
-//////////////////////////////////////////////////////////////////////////////// 
 
 typedef lemon::ListGraph Graph;
 typedef std::set<Pair> Tree;
-typedef std::pair<Mat3, Vec3> Transformationz;
+
+////////////////////////////////////////////////////////////////////////////////
+//                               TRANSFORMATION                               //
+//////////////////////////////////////////////////////////////////////////////// 
 
 struct Transformation {
 public:
 
-  Transformation():R(Mat3::Identity()),t(Vec3::Zero()),length(0) {}
-  Transformation(std::pair<Mat3,Vec3> np): R(np.first), t(np.second), length(1) {}
-  Transformation(Mat3 nr, Vec3 nt, int nl): R(nr), t(nt), length(nl) {}
+  Transformation():R(Mat3::Identity()),t(Vec3::Zero()) {}
+  Transformation( std::pair<Mat3,Vec3> nt, Pair np ): R(nt.first), t(nt.second) {
+    path.push_back(np.first);    path.push_back(np.second);
+  }
+  Transformation( Mat3 nr, Vec3 nt, std::list<IndexT> np ): R(nr), t(nt), path(np) {}
 
   // Constructor for the inverse transformation
-  Transformation(std::pair<Mat3,Vec3> np, string foo): R(np.first.transpose()), t(- np.first.transpose()*np.second), length(1) {}
+  Transformation( std::pair<Mat3,Vec3> nt, Pair np, string foo ):
+	  R(nt.first.transpose()),
+	  t(- nt.first.transpose()*nt.second) {
+      path.push_back(np.second);    path.push_back(np.first);
+  }
 
   Mat3 R;
   Vec3 t;
-  int length;  
-  
+  std::list<IndexT> path;  
+  // (TODO:L)-> Clean the path when compose
   void compose_left( const Transformation & T ){
-    R = T.R * R;    t = T.R * t + T.t;    length = length + T.length;
+    R = T.R * R;    t = T.R * t + T.t;
+    std::cout << "\nCOMPOSE_LEFT\nListe initial : ";    for (std::list<IndexT>::const_iterator it=path.begin(); it!=path.end(); ++it){ std::cout << ' ' << *it;}
+    std::cout << "\nListe rajoutée : ";    for (std::list<IndexT>::const_iterator it=T.path.begin(); it!=T.path.end(); ++it){ std::cout << ' ' << *it;}
+    path.insert(path.end(), T.path.begin(), T.path.end());
+    std::cout << "\nListe finale : ";    for (std::list<IndexT>::const_iterator it=path.begin(); it!=path.end(); ++it){ std::cout << ' ' << *it;}
   }
-  void compose_left( const std::pair<Mat3, Vec3> & T ){
-    R = T.first * R;    t = T.first * t + T.second;    length = length + 1;
+  void compose_left( const std::pair<Mat3,Vec3> & nt, const Pair & np ){
+    //std::cout << "\nCOMPOSE_LEFT_pair\nListe initial : ";    for (std::list<IndexT>::const_iterator it=path.begin(); it!=path.end(); ++it){ std::cout << ' ' << *it;}
+    //std::cout << "\nListe rajoutée : "<< np.first << " " << np.second;
+    R = nt.first * R;    t = nt.first * t + nt.second;
+    path.push_back(np.first);	path.push_back(np.second);
+    //std::cout << "\nListe finale : ";    for (std::list<IndexT>::const_iterator it=path.begin(); it!=path.end(); ++it){ std::cout << ' ' << *it;}
   }
   void compose_right( const Transformation & T ){
-    R = R * T.R;    t = R * T.t + t;    length = length + T.length;
+    //std::cout << "\nCOMPOSE_RIGHT\nListe initial : ";    for (std::list<IndexT>::const_iterator it=path.begin(); it!=path.end(); ++it){ std::cout << ' ' << *it;}
+    //std::cout << "\nListe rajoutée : ";    for (std::list<IndexT>::const_iterator it=T.path.begin(); it!=T.path.end(); ++it){ std::cout << ' ' << *it;}
+    R = R * T.R;    t = R * T.t + t;
+    std::list<IndexT> foo = T.path;
+    foo.insert( foo.end(), path.begin(), path.end() );
+    path = foo;
+    //std::cout << "\nListe finale : ";    for (std::list<IndexT>::const_iterator it=path.begin(); it!=path.end(); ++it){ std::cout << ' ' << *it;}
   }
-  void compose_right( const std::pair<Mat3, Vec3> & T ){
-    R = R * T.first;    t = R * T.second + t;    length = length + 1;
+  void compose_right( const std::pair<Mat3,Vec3> & nt, const Pair & np ){
+    std::cout << "\nCOMPOSE_RIGHT_pair\nListe initial : ";    for (std::list<IndexT>::const_iterator it=path.begin(); it!=path.end(); ++it){ std::cout << ' ' << *it;}
+    std::cout << "\nListe rajoutée : "<< np.first << " " << np.second;
+    R = R * nt.first;    t = R * nt.second + t;
+    path.push_front(np.second);	path.push_front(np.first);
+    std::cout << "\nListe finale : ";    for (std::list<IndexT>::const_iterator it=path.begin(); it!=path.end(); ++it){ std::cout << ' ' << *it;}
   }
   void compose_left_rev( const Transformation & T ){
-    R = T.R.transpose() * R;    t = T.R.transpose() * (t - T.t);    length = length + T.length;
+    //std::cout << "\nCOMPOSE_LEFT_REV\nListe initial : ";    for (std::list<IndexT>::const_iterator it=path.begin(); it!=path.end(); ++it){ std::cout << ' ' << *it;}
+    //std::cout << "\nListe rajoutée : ";    for (std::list<IndexT>::const_iterator it=T.path.begin(); it!=T.path.end(); ++it){ std::cout << ' ' << *it;}
+    R = T.R.transpose() * R;    t = T.R.transpose() * (t - T.t);
+    std::list<IndexT> foo = T.path;
+    foo.reverse();
+    path.insert(path.end(), foo.begin(), foo.end());
+    //std::cout << "\nListe finale : ";    for (std::list<IndexT>::const_iterator it=path.begin(); it!=path.end(); ++it){ std::cout << ' ' << *it;}
+  }
+  
+  void clean_cycle_path(){
+    IndexT foo1, bar1, foo2, bar2;
+    foo1 = path.front();    path.pop_front();    foo2 = path.front();    path.pop_front();
+    bar1 = path.back();    path.pop_back();    bar2 = path.back();    path.pop_back();
+      
+    if( foo1 != bar1 )
+      throw "The path is not a cycle. We can't compute the consistency error."; 
+    while( foo2 == bar2 ){
+      if( path.empty() ){ return; }
+      foo1 = path.front();    path.pop_front();      foo2 = path.front();    path.pop_front();
+      if( path.empty() ){ path.push_front(foo2); path.push_front(foo1); return; }
+      bar1 = path.back();    path.pop_back();      bar2 = path.back();    path.pop_back();
+    }
+    path.push_front(foo2);    path.push_front(foo1);    path.push_back(bar2);    path.push_back(bar1);
+  }
+
+  void clean_path(){
+    std::list<IndexT> cpath;
+    IndexT foo1, foo2, foo3, foo4;
+    if( path.empty() ){ return; }
+    foo1 = path.front();    path.pop_front();    foo2 = path.front();    path.pop_front();
+    if( path.empty() ){ path.push_back(foo1); path.push_back(foo2); return; }
+    foo3 = path.front();    path.pop_front();    foo4 = path.front();    path.pop_front();
+        
+    if( foo2 != foo3 )
+      throw "The path is not a real path...";
+    while( !path.empty() ){
+      if( foo1 != foo4 ){
+	cpath.push_back(foo1);	cpath.push_back(foo2);
+	foo1=foo3;		foo2=foo4;
+      } else {
+	if( cpath.empty() ){
+	  if( path.empty() ){ path = cpath; return; }
+	  foo1 = path.front();    path.pop_front();      foo2 = path.front();    path.pop_front();	  
+	}else{
+	  foo2 = cpath.back();    cpath.pop_back();    foo1 = cpath.back();    cpath.pop_back();
+	}
+      }
+      if( path.empty() ){ cpath.push_back(foo1); cpath.push_back(foo2); path = cpath; return;}
+      foo3 = path.front();    path.pop_front();      foo4 = path.front();    path.pop_front();
+    }
+    cpath.push_back(foo1);	cpath.push_back(foo2);		cpath.push_back(foo3);	cpath.push_back(foo4);
+    
+    path = cpath;
   }
   
   double error(){
-    return R2D(getRotationMagnitude(R));
+    clean_cycle_path();
+    clean_path();
+    const int L = path.size();
+    // std::cout << "Erreur chemin = ";    for (std::list<IndexT>::const_iterator it=path.begin(); it!=path.end(); ++it){ std::cout << ' ' << *it;}
+    // std::cout << std::endl;
+    if (L == 0)
+      return 0.; 
+    return 0.4082 * sqrt(L) * R2D(getRotationMagnitude(R));  // 0.4082 = 1/sqrt(3*2)
   }
 };
+
+////////////////////////////////////////////////////////////////////////////////
+//                          Global SfM Graph Cleaner                          //
+//////////////////////////////////////////////////////////////////////////////// 
 
 class GlobalSfM_Graph_Cleaner
 {  /*
@@ -213,7 +299,7 @@ class GlobalSfM_Graph_Cleaner
       std::cout << "\ninitialisation end\n" << std::endl;
       
       // DEBUG
-      dbtalk = true;
+      dbtalk = false;
       tikzfile.open ("graphe.tex");
       tikzfile << "\\documentclass[tikz]{standalone}\n"
 	       << "\\def\\zdraw[#1][#2][#3]{\\ifnum#2=\\componentchoice\\ifnum#3=1\\draw[tp]\\else\\draw[fp]\\fi\\else\\ifnum#3=1\\draw[fn]\\else\\draw[tn]\\fi\\fi}"
@@ -296,19 +382,26 @@ class GlobalSfM_Graph_Cleaner
   ////////// // // /  /    /       /          /       /    /  / // // //////////
     
     Transformation inverse_transformation( const Transformation & T ) const{
-	return Transformation( T.R.transpose(), - T.R.transpose()*T.t, T.length );
+      std::list<IndexT> foo = T.path;
+      foo.reverse();
+	return Transformation( T.R.transpose(), - T.R.transpose()*T.t, foo );
     }
     
     Transformation get_transformation( const Pair & pair ) const{
       if (relatives_Rt.find(pair) != relatives_Rt.end())
-	return Transformation(relatives_Rt.at(pair));
+	return Transformation(relatives_Rt.at(pair), pair);
       else
-	return Transformation(relatives_Rt.at( make_pair(pair.second,pair.first) ), "inverse");
+	return Transformation(relatives_Rt.at( make_pair(pair.second,pair.first) ), make_pair(pair.second,pair.first), "inverse");
     }
     
     Transformation compose_transformation( const Transformation & T1,
 					   const Transformation & T2 ) const{
-      return Transformation( T1.R * T2.R, T1.R * T2.t + T1.t, T1.length + T2.length );
+    //std::cout << "\nCOMPOSE_TRANSFORMATION\nListe initial : ";    for (std::list<IndexT>::const_iterator it=T1.path.begin(); it!=T1.path.end(); ++it){ std::cout << ' ' << *it;}
+    //std::cout << "\nListe rajoutée : ";    for (std::list<IndexT>::const_iterator it=T2.path.begin(); it!=T2.path.end(); ++it){ std::cout << ' ' << *it;}
+      std::list<IndexT> foo = T2.path;
+      foo.insert(foo.end(), T1.path.begin(), T1.path.end());
+    //std::cout << "\nListe finale : ";    for (std::list<IndexT>::const_iterator it=foo.begin(); it!=foo.end(); ++it){ std::cout << ' ' << *it;}
+      return Transformation( T1.R * T2.R, T1.R * T2.t + T1.t, foo );
     }
     
   ////////// // // /  /    /       /          /       /    /  / // // //////////
