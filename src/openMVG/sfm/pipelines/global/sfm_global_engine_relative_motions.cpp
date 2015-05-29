@@ -151,7 +151,7 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Process() {
     RelativeInfo_Map old_relatives_Rt = graph_cleaner.run();
     old_relatives_Rt.swap(_relatives_Rt);
   }
-  Log_Display_graph("cleaned graph",_relatives_Rt); // GRAPH DISPLAY
+  Log_Display_graph("cleaned_graph",_relatives_Rt); // GRAPH DISPLAY
 
   // 3 - Compute Global Rotation
   if (!Compute_Global_Rotations())

@@ -223,7 +223,7 @@ public:
     // std::cout << std::endl;
     if (L == 0)
       return 0.; 
-    return 0.4082 * sqrt(L) * R2D(getRotationMagnitude(R));  // 0.4082 = 1/sqrt(3*2)
+    return (2.44948974278 * R2D(getRotationMagnitude(R)) / sqrt(L));  // 2.44948974278 = sqrt(3*2)
   }
 };
 
