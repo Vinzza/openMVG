@@ -143,9 +143,11 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Process() {
   Log_Display_graph("InitialGraph",_matches_provider->_pairWise_matches); // GRAPH DISPLAY
 
   // 1 - Compute relative rotations (and translation)
+  std::cout << "\n---------------------\nCOMPUTE RELATIVE ROTATION..." << std::endl;
   Compute_Relative_Rotations(_relatives_Rt);
   
   // 2 - Relative Rotation Inference
+  std::cout << "\n---------------------\nROTATION INFERENCE..." << std::endl;
   {
     GlobalSfM_Graph_Cleaner graph_cleaner(_relatives_Rt);
     RelativeInfo_Map old_relatives_Rt = graph_cleaner.run();
@@ -154,6 +156,7 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Process() {
   Log_Display_graph("cleaned_graph",_relatives_Rt); // GRAPH DISPLAY
 
   // 3 - Compute Global Rotation
+  std::cout << "\n---------------------\nGLOBAL ROTATION..." << std::endl;
   if (!Compute_Global_Rotations())
   {
     std::cerr << "GlobalSfM:: Rotation Averaging failure!" << std::endl;
@@ -161,13 +164,15 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Process() {
   }
   
   // 4 - Compute Global Translation
+  std::cout << "\n---------------------\nGLOBAL TRANSLATION..." << std::endl;
   if (!Compute_Global_Translations())
   {
     std::cerr << "GlobalSfM:: Translation Averaging failure!" << std::endl;
     return false;
   }
   
-  // 5 - Compute triangularization of the 3D points
+  // 5 - Compute triangulation of the 3D points
+  std::cout << "\n---------------------\nINITIAL TRIANGULATION..." << std::endl;
   if (!Compute_Initial_Structure())
   {
     std::cerr << "GlobalSfM:: Cannot initialize an initial structure!" << std::endl;
@@ -175,6 +180,7 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Process() {
   }
   
   // 6 - Bundle Adjustment
+  std::cout << "\n---------------------\nBUNDLE ADMUSTMENT..." << std::endl;
   if (!Adjust())
   {
     std::cerr << "GlobalSfM:: Non-linear adjustment failure!" << std::endl;
