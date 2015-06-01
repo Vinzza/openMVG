@@ -131,42 +131,27 @@ public:
   // (TODO:L)-> Clean the path when compose
   void compose_left( const Transformation & T ){
     R = T.R * R;    t = T.R * t + T.t;
-    std::cout << "\nCOMPOSE_LEFT\nListe initial : ";    for (std::list<IndexT>::const_iterator it=path.begin(); it!=path.end(); ++it){ std::cout << ' ' << *it;}
-    std::cout << "\nListe rajoutée : ";    for (std::list<IndexT>::const_iterator it=T.path.begin(); it!=T.path.end(); ++it){ std::cout << ' ' << *it;}
     path.insert(path.end(), T.path.begin(), T.path.end());
-    std::cout << "\nListe finale : ";    for (std::list<IndexT>::const_iterator it=path.begin(); it!=path.end(); ++it){ std::cout << ' ' << *it;}
   }
   void compose_left( const std::pair<Mat3,Vec3> & nt, const Pair & np ){
-    //std::cout << "\nCOMPOSE_LEFT_pair\nListe initial : ";    for (std::list<IndexT>::const_iterator it=path.begin(); it!=path.end(); ++it){ std::cout << ' ' << *it;}
-    //std::cout << "\nListe rajoutée : "<< np.first << " " << np.second;
     R = nt.first * R;    t = nt.first * t + nt.second;
     path.push_back(np.first);	path.push_back(np.second);
-    //std::cout << "\nListe finale : ";    for (std::list<IndexT>::const_iterator it=path.begin(); it!=path.end(); ++it){ std::cout << ' ' << *it;}
   }
   void compose_right( const Transformation & T ){
-    //std::cout << "\nCOMPOSE_RIGHT\nListe initial : ";    for (std::list<IndexT>::const_iterator it=path.begin(); it!=path.end(); ++it){ std::cout << ' ' << *it;}
-    //std::cout << "\nListe rajoutée : ";    for (std::list<IndexT>::const_iterator it=T.path.begin(); it!=T.path.end(); ++it){ std::cout << ' ' << *it;}
     R = R * T.R;    t = R * T.t + t;
     std::list<IndexT> foo = T.path;
     foo.insert( foo.end(), path.begin(), path.end() );
     path = foo;
-    //std::cout << "\nListe finale : ";    for (std::list<IndexT>::const_iterator it=path.begin(); it!=path.end(); ++it){ std::cout << ' ' << *it;}
   }
   void compose_right( const std::pair<Mat3,Vec3> & nt, const Pair & np ){
-    std::cout << "\nCOMPOSE_RIGHT_pair\nListe initial : ";    for (std::list<IndexT>::const_iterator it=path.begin(); it!=path.end(); ++it){ std::cout << ' ' << *it;}
-    std::cout << "\nListe rajoutée : "<< np.first << " " << np.second;
     R = R * nt.first;    t = R * nt.second + t;
     path.push_front(np.second);	path.push_front(np.first);
-    std::cout << "\nListe finale : ";    for (std::list<IndexT>::const_iterator it=path.begin(); it!=path.end(); ++it){ std::cout << ' ' << *it;}
   }
   void compose_left_rev( const Transformation & T ){
-    //std::cout << "\nCOMPOSE_LEFT_REV\nListe initial : ";    for (std::list<IndexT>::const_iterator it=path.begin(); it!=path.end(); ++it){ std::cout << ' ' << *it;}
-    //std::cout << "\nListe rajoutée : ";    for (std::list<IndexT>::const_iterator it=T.path.begin(); it!=T.path.end(); ++it){ std::cout << ' ' << *it;}
     R = T.R.transpose() * R;    t = T.R.transpose() * (t - T.t);
     std::list<IndexT> foo = T.path;
     foo.reverse();
     path.insert(path.end(), foo.begin(), foo.end());
-    //std::cout << "\nListe finale : ";    for (std::list<IndexT>::const_iterator it=path.begin(); it!=path.end(); ++it){ std::cout << ' ' << *it;}
   }
   
   void clean_cycle_path(){
@@ -224,6 +209,10 @@ public:
     if (L == 0)
       return 0.; 
     return (2.44948974278 * R2D(getRotationMagnitude(R)) / sqrt(L));  // 2.44948974278 = sqrt(3*2)
+  }
+  
+  void print_path(){
+    for (std::list<IndexT>::const_iterator it=path.begin(); it!=path.end(); ++it){ std::cout << ' ' << *it;}
   }
 };
 

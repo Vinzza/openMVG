@@ -25,20 +25,20 @@ using namespace openMVG::rotation_averaging;
 RelativeInfo_Map GlobalSfM_Graph_Cleaner::run()
 {
   
-  std::cout << "Construction of the initial..." << std::endl;
+  std::cout << "------------\nConstruction of the initial..." << std::endl;
   dbtalk = true;
   Tree coherent_tree = generate_Consistent_Tree(7);
   
   for (Tree::const_iterator iter = coherent_tree.begin(); iter != coherent_tree.end(); ++iter)
     tikzfile << "\\draw[itree](" << iter->first << ")--(" << iter->second << ");"<<std::endl;
     
-  std::cout << "Enlargement of the tree..." << std::endl;  
+  std::cout << "------------\nEnlargement of the tree..." << std::endl;  
   increase_Tree( coherent_tree );
-  std::cout << "Find coherent edges..." << std::endl;  
+  std::cout << "------------\nFind coherent edges..." << std::endl;  
   update_Coherence( coherent_tree );
   dbtalk = false;
   
-  std::cout << "Extraction of the principal coherent component..." << std::endl;  
+  std::cout << "------------\nExtraction of the principal coherent component..." << std::endl;  
   int max_comp = principale_Coherence();
   
   tikzfile << "\n\\def\\componentchoice{" << max_comp << "}\n";
@@ -322,7 +322,7 @@ void GlobalSfM_Graph_Cleaner::rotationRejection(const double max_angular_error,
     for( int foo = 1; foo < nb_iter; foo++ ){
       Tree tree_i = generate_Random_Tree(size);
       tree_err = tree_Consistency_Error( tree_i, nbpos, nbneg );
-      err = (1+tree_err) * (nbneg + 1)/(nbpos+1); // <-(TODO)
+      err = (5+tree_err) * (nbneg + 1)/(nbpos+1); // <-(TODO)
       
       if( err < best_error ){
 	best_tree = tree_i;
@@ -372,46 +372,89 @@ void GlobalSfM_Graph_Cleaner::rotationRejection(const double max_angular_error,
 ////////////////////////////////////////////////////////////////////////////////
   
   double GlobalSfM_Graph_Cleaner::edge_Descent_Error(
-	      const IndexT & t,
+	      const IndexT & to,
 	      Transformation T,
 	      const std::map< IndexT, int > & distance,
 	      const std::map<IndexT,Transformation> & globalTransformation,
 	      int & nbpos_i,
 	      int & nbneg_i  ) const {
     double error = 10000.;
-    double foo_error;    
+    double foo_error;
+    std::list<std::pair<bool,Pair>> paths;
+    std::pair<bool,Pair> path_foo;
+    IndexT s, t;
+    Transformation T_foo;
     
-    // if(dbtalk){std::cout << "(" << t;} // DBTALK
-    if( distance.at(t) == 0 ){
-      //if(dbtalk){std::cout << "z"; std::cout.flush();} // DBTALK
-      T.compose_left_rev(globalTransformation.at(t));
-      // = compose_transformation( inverse_transformation(globalTransformation.at(t)) ,T );
-      error = T.error(); // R2D(getRotationMagnitude(T.first));
-      // if(dbtalk){std::cout << ":" << error << "!";						// DBTALK
-	// for (std::list<IndexT>::iterator it=T.path.begin(); it!=T.path.end(); ++it)		// DBTALK
-	//   std::cout << ' ' << *it;								// DBTALK
-	// std::cout << ")";}									// DBTALK
+    if ( distance.at(to) == 0 ){
+      T.compose_left_rev(globalTransformation.at(to));
+      error = T.error();
       if (error < error_thres)
 	nbpos_i += 1;
       else
 	nbneg_i += 1;
+      //if(dbtalk){std::cout << "  Path0 = "; T.print_path(); std::cout << " : err = " << error << std::endl;}
       return error;
     }
     
-    const std::set<IndexT> adj_t = adjacency_map.at(t);
-    for( std::set<IndexT>::const_iterator iter = adj_t.begin(); iter != adj_t.end(); ++iter ) {
+    //if(dbtalk){std::cout << "  " << to << "(+"; std::cout.flush();}
+
+    const std::set<IndexT> adj_t = adjacency_map.at(to);
+    for( std::set<IndexT>::const_iterator iter = adj_t.begin(); iter != adj_t.end(); ++iter ) {      
+      if( distance.at(to) > distance.at(*iter) ){
+	paths.push_front(std::make_pair(true, std::make_pair(to,*iter)));
+	//if(dbtalk){std::cout << " " << *iter; std::cout.flush();}
+      }
+    }
+    //if(dbtalk){std::cout << ")"; std::cout.flush();}
+    
+    while( !paths.empty() ){
+
+      path_foo = paths.front();
+      s = path_foo.second.first;
+      t = path_foo.second.second;
+      paths.pop_front();
+      //if(dbtalk){std::cout << "  " << t; std::cout.flush();}
       
-      if( distance.at(*iter) < distance.at(t) ){
-	//if(dbtalk){std::cout << "y"; std::cout.flush();} // DBTALK
-        foo_error = edge_Descent_Error(
-		*iter,
-		compose_transformation(get_transformation(std::make_pair(t,*iter)), T),
-		distance, globalTransformation, nbpos_i, nbneg_i );
-	error = min( error, foo_error );
+      if( path_foo.first ){ // We need to continue the path
+	//if(dbtalk){std::cout << "(+"; std::cout.flush();}
+
+	if( 0 == distance.at(t) ){ // The vertex is in the tree
+	  //if(dbtalk){std::cout << "/)"; std::cout.flush();}
+	  T_foo = T;
+	  T_foo.compose_left(get_transformation(path_foo.second));
+	  T_foo.compose_left_rev(globalTransformation.at(t));
+	  foo_error = T_foo.error();
+	  if (foo_error < error_thres)
+	    nbpos_i += 1;
+	  else
+	    nbneg_i += 1;
+	  if (foo_error < error) { error = foo_error; }
+	  //if(dbtalk){std::cout << "  Path = "; T_foo.print_path(); std::cout << " : err = " << foo_error << std::endl;}
+
+	} else { // The vertex is not in the tree : we must continue
+	  
+	  T.compose_left(get_transformation(path_foo.second));  
+	  paths.push_front(std::make_pair(false, std::make_pair(t,s)));
+
+	  const std::set<IndexT> adj_t = adjacency_map.at(t);
+	  for( std::set<IndexT>::const_iterator iter = adj_t.begin(); iter != adj_t.end(); ++iter ) {      
+	    if( distance.at(t) > distance.at(*iter) ){
+	      paths.push_front(std::make_pair(true, std::make_pair(t,*iter)));
+	      //if(dbtalk){std::cout << " " << *iter; std::cout.flush();}
+	    }
+	  }
+	  //if(dbtalk){std::cout << ")"; std::cout.flush();}
+	}
+	
+      } else { // We need the go back the path
+	
+	T.compose_left(get_transformation(path_foo.second));
+	//if(dbtalk){std::cout << "(-)"; std::cout.flush();}
+	
       }
       
     }
-//    if(dbtalk){std::cout << ")";} // DBTALK
+    
     return error;
   }
   
@@ -490,7 +533,7 @@ void GlobalSfM_Graph_Cleaner::rotationRejection(const double max_angular_error,
 		  distance,globalTransformation,nbpos_i,nbneg_i);
 	//if(dbtalk){std::cout << ","; std::cout.flush();} // DBTALK
 	
-	// if(dbtalk){std::cout << new_node << " -> " << *iter << " : " <<  error << "(" << nbpos_i << "/" << nbneg_i << ")" << std::endl;} // DBTALK
+	//if(dbtalk){std::cout << " " << new_node << " -> " << *iter << " : " <<  error << "(" << nbpos_i << "/" << nbneg_i << ")" << std::endl;} // DBTALK
 	
 	consistency_error += error;
 	if (error < error_thres)
@@ -522,8 +565,8 @@ void GlobalSfM_Graph_Cleaner::rotationRejection(const double max_angular_error,
       min_error = 10000;
       if(dbtalk){std::cout << "\nTree_nodes = "; // DBTALK
       for(std::set<IndexT>::const_iterator iter = tree_nodes.begin(); iter != tree_nodes.end(); ++iter)
-	      std::cout << *iter << " "; // DBTALK	
-      }
+	      std::cout << *iter << " "; // DBTALK
+      std::cout << std::endl;}
       for(RelativeInfo_Map::const_iterator iter = relatives_Rt.begin(); iter != relatives_Rt.end(); ++iter) {
 	Pair pair = iter->first;
 	IndexT s = pair.first;
@@ -531,11 +574,9 @@ void GlobalSfM_Graph_Cleaner::rotationRejection(const double max_angular_error,
 	if( ( tree_nodes.find(s) == tree_nodes.end() && tree_nodes.find(t) != tree_nodes.end() )
 	  ||( tree_nodes.find(s) != tree_nodes.end() && tree_nodes.find(t) == tree_nodes.end() ) ){
 	  
-	  //if(dbtalk){std::cout << "-"; std::cout.flush();} // DBTALK
 	  consistency_error = edge_Consistency_Error( pair, tree, tree_nodes, nbpos, nbneg);
-	  error = (1+consistency_error) * ( nbneg + 1 ) / ( nbpos + 1 ); // <-(TODO)
+	  error = (5+consistency_error) * ( nbneg + 1 ) / ( nbpos + 1 ); // <-(TODO)
 	  
-	  //if(dbtalk){std::cout << "+"; std::cout.flush();} // DBTALK
 	  if ( error < min_error ){
 	    if(dbtalk){std::cout << s << "," << t << " : " << error << " = " << consistency_error << "(" << nbpos << "/" << nbneg << ")" << std::endl;} // DBTALK
 	    min_error = error;
