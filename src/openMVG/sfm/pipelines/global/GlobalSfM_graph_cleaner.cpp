@@ -27,7 +27,7 @@ RelativeInfo_Map GlobalSfM_Graph_Cleaner::run()
   
   std::cout << "------------\nConstruction of the initial..." << std::endl;
   dbtalk = true;
-  Tree coherent_tree = generate_Consistent_Tree(7);
+  Tree coherent_tree = generate_Consistent_Tree(initial_tree_size);
   
   for (Tree::const_iterator iter = coherent_tree.begin(); iter != coherent_tree.end(); ++iter)
     tikzfile << "\\draw[itree](" << iter->first << ")--(" << iter->second << ");"<<std::endl;
@@ -464,6 +464,7 @@ void GlobalSfM_Graph_Cleaner::rotationRejection(const double max_angular_error,
 	      const Pair & pair,
 	      const Tree & tree,
 	      const std::set<IndexT> & tree_nodes,
+	      const std::map<IndexT,Transformation> & globalTransformation,
 	      int & nbpos,
 	      int & nbneg) const{
     double consistency_error = 0.;
@@ -507,10 +508,6 @@ void GlobalSfM_Graph_Cleaner::rotationRejection(const double max_angular_error,
     }
     distance[new_node] = adjacency_map.size() + 1;
     //if(dbtalk){std::cout << "b"; std::cout.flush();} // DBTALK
-    
-    // Compute the globalTransformation
-    std::map<IndexT,Transformation> globalTransformation; // TODO : Precompute this
-    sequential_Tree_Reconstruction(tree, globalTransformation);
 
     Transformation T_pair = compose_transformation(
 			get_transformation(std::make_pair(tree_node, new_node)),
@@ -555,11 +552,16 @@ void GlobalSfM_Graph_Cleaner::rotationRejection(const double max_angular_error,
     double consistency_error, error;
     double min_error = 0;
     Pair best_pair;
+    Transformation T_foo;
             
     for(Tree::iterator iter = tree.begin(); iter != tree.end(); ++iter) {
       tree_nodes.insert(iter->first);
       tree_nodes.insert(iter->second);
     }
+    
+    // Compute the globalTransformation
+    std::map<IndexT,Transformation> globalTransformation;
+    sequential_Tree_Reconstruction(tree, globalTransformation);
 
     while(min_error < 10000) {
       min_error = 10000;
@@ -574,7 +576,7 @@ void GlobalSfM_Graph_Cleaner::rotationRejection(const double max_angular_error,
 	if( ( tree_nodes.find(s) == tree_nodes.end() && tree_nodes.find(t) != tree_nodes.end() )
 	  ||( tree_nodes.find(s) != tree_nodes.end() && tree_nodes.find(t) == tree_nodes.end() ) ){
 	  
-	  consistency_error = edge_Consistency_Error( pair, tree, tree_nodes, nbpos, nbneg);
+	  consistency_error = edge_Consistency_Error( pair, tree, tree_nodes, globalTransformation, nbpos, nbneg);
 	  error = (5+consistency_error) * ( nbneg + 1 ) / ( nbpos + 1 ); // <-(TODO)
 	  
 	  if ( error < min_error ){
@@ -588,6 +590,15 @@ void GlobalSfM_Graph_Cleaner::rotationRejection(const double max_angular_error,
 	tree_nodes.insert(best_pair.first);
 	tree_nodes.insert(best_pair.second);
 	tree.insert(best_pair);
+	if( globalTransformation.find(best_pair.second) == globalTransformation.end() ){
+	  T_foo = globalTransformation.at(best_pair.first);
+	  T_foo.compose_left( get_transformation(best_pair) );
+	  globalTransformation[ best_pair.second ] = T_foo;
+	} else {
+	  T_foo = globalTransformation.at(best_pair.second);
+	  T_foo.compose_left( get_transformation(std::make_pair(best_pair.second, best_pair.first)) );
+	  globalTransformation[ best_pair.first ] = T_foo;
+	}
       }
     } // while
     

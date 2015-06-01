@@ -33,6 +33,7 @@ int main(int argc, char **argv)
   double min_angular_error = 30;
   double max_noise = 2;  
   double error_thres = 5.;
+  int initial_tree_size = 5.;
   
   CmdLine cmd;
   
@@ -41,6 +42,7 @@ int main(int argc, char **argv)
   cmd.add( make_option('f', wrong_edges_p, "faussesCorrespondances") );  
   cmd.add( make_option('b', max_noise, "bruit") );
   cmd.add( make_option('e', min_angular_error, "erreurMin") );
+  cmd.add( make_option('s', initial_tree_size, "initialTreeSize") );
   cmd.add( make_option('t', error_thres, "seuilErreur") );
   
   cmd.process(argc, argv);
@@ -59,6 +61,7 @@ int main(int argc, char **argv)
     << "Bruit : " << R2D(max_noise) << std::endl
     << "Erreur angulaire minimum des mauvaises correspondances : " << R2D(min_angular_error) << std::endl
     << "Seuil d'erreur : " << error_thres << std::endl
+    << "Taille d'arbre initial : " << initial_tree_size << std::endl
     << "-----------------------------------------------------------"<<std::endl;
     
   
@@ -129,7 +132,7 @@ int main(int argc, char **argv)
     }
   }
     
-  sfm::GlobalSfM_Graph_Cleaner graph_cleaner(map_relative, error_thres);
+  sfm::GlobalSfM_Graph_Cleaner graph_cleaner(map_relative, error_thres, initial_tree_size);
   graph_cleaner.set_position_groundtruth(C_global);
   graph_cleaner.set_wrong_edges(wrong_edges);
   std::cout << "-----------------------------------------------------------\n---- Cleaning Graph" << std::endl;

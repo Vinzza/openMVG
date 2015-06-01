@@ -261,8 +261,8 @@ class GlobalSfM_Graph_Cleaner
   ////////// // // /  /    /       /          /       /    /  / // // //////////
   //                               CONSTRUCTORS                               //    
   ////////// // // /  /    /       /          /       /    /  / // // //////////
-    GlobalSfM_Graph_Cleaner(const RelativeInfo_Map & map_relat, const double & error_thres = 5.)
-    :relatives_Rt(map_relat), error_thres(error_thres) {
+    GlobalSfM_Graph_Cleaner(const RelativeInfo_Map & map_relat, const double & error_thres = 5., const int & initial_tree_size = 7)
+    :relatives_Rt(map_relat), error_thres(error_thres), initial_tree_size(initial_tree_size) {
       // Build SetNodes
       std::set<IndexT> setNodes;
       std::cout << "Graph initialisation:" << std::endl;
@@ -270,17 +270,17 @@ class GlobalSfM_Graph_Cleaner
 	setNodes.insert(iter->first.first);	setNodes.insert(iter->first.second);      }
       std::cout << "Nodes:";
       // Build association beetween Node and indexT
-      for (std::set<IndexT>::const_iterator iter = setNodes.begin(); iter != setNodes.end(); ++iter) {
-	indexMapNode[*iter] = g.addNode();      nodeMapIndex[ indexMapNode[*iter] ] = *iter;
-	std::cout << " " << g.id(indexMapNode[*iter]);
-      }      
+//      for (std::set<IndexT>::const_iterator iter = setNodes.begin(); iter != setNodes.end(); ++iter) {
+//	indexMapNode[*iter] = g.addNode();      nodeMapIndex[ indexMapNode[*iter] ] = *iter;
+//	std::cout << " " << g.id(indexMapNode[*iter]);
+//      }      
       // Add the edge
       int count = 0;
       std::cout << "\nEdges:";
       for(RelativeInfo_Map::const_iterator iter = map_relat.begin(); iter != map_relat.end(); ++iter) {
 	const Pair p = std::make_pair(iter->first.first, iter->first.second);
 	// Initialisation of PairMapEdge
-	pairMapEdge[p] = g.addEdge(indexMapNode[p.first], indexMapNode[p.second]);
+//	pairMapEdge[p] = g.addEdge(indexMapNode[p.first], indexMapNode[p.second]);
 	adjacency_map[p.first].insert(p.second);
 	adjacency_map[p.second].insert(p.first);
 	std::cout << " (" << p.first << "," << p.second << ") ";      
@@ -354,12 +354,12 @@ class GlobalSfM_Graph_Cleaner
     std::map< Pair, int > CohenrenceMap;
     
     // Graph
-    Graph g;
+//    Graph g;
     // Map to switch from IndexT to Node and Node to IndexT
-    std::map<Graph::Node, IndexT> nodeMapIndex;
-    std::map<IndexT, Graph::Node> indexMapNode;
+//    std::map<Graph::Node, IndexT> nodeMapIndex;
+//    std::map<IndexT, Graph::Node> indexMapNode;
     // Map to switch from Pair to Edge
-    std::map<Pair, Graph::Edge> pairMapEdge;
+//    std::map<Pair, Graph::Edge> pairMapEdge;
 
     // Adjacency map
     typedef std::map<IndexT, std::set<IndexT>> Adjacency_map;
@@ -367,6 +367,7 @@ class GlobalSfM_Graph_Cleaner
     
     //
     double error_thres;
+    int initial_tree_size;
     
   ////////// // // /  /    /       /          /       /    /  / // // //////////
     
@@ -430,7 +431,13 @@ class GlobalSfM_Graph_Cleaner
 	  Transformation T, const std::map< IndexT, int > & distance,
 	  const std::map<IndexT,Transformation> & globalTransformation,
 	  int & nbpos_i, int & nbneg_i) const;
-    double edge_Consistency_Error( const Pair & pair, const Tree & tree, const std::set<IndexT> & tree_nodes, int & nbpos, int & nbneg  ) const;
+    double edge_Consistency_Error(
+	  const Pair & pair,
+	  const Tree & tree,
+	  const std::set<IndexT> & tree_nodes,
+	  const std::map<IndexT,Transformation> & globalTransformation,
+	  int & nbpos,
+	  int & nbneg) const;
     
     void increase_Tree( Tree & tree ) const;
     
