@@ -283,9 +283,20 @@ class GlobalSfM_Graph_Cleaner
 //	pairMapEdge[p] = g.addEdge(indexMapNode[p.first], indexMapNode[p.second]);
 	adjacency_map[p.first].insert(p.second);
 	adjacency_map[p.second].insert(p.first);
-	std::cout << " (" << p.first << "," << p.second << ") ";      
+	std::cout << " (" << p.first << "," << p.second << ")[" << count << "]";      
 	CohenrenceMap[p] = count; count+=1; }  // Initialisation of conherencMap
       std::cout << "\ninitialisation end\n" << std::endl;
+
+      descent_max = 1000;
+      default_max_error = 10000;
+      error_valid_thres = -1;
+      nb_steps_skip = 0;
+      max_error_thres = 20;
+      error_cst = 5;
+      stop_thres = 200;
+      max_descent_size = 10000;
+      edge_inconsistency_thres = default_max_error;
+      number_tree = 1;
       
       // DEBUG
       dbtalk = false;
@@ -294,22 +305,38 @@ class GlobalSfM_Graph_Cleaner
 	       << "\\def\\zdraw[#1][#2][#3]{\\ifnum#2=\\componentchoice\\ifnum#3=1\\draw[tp]\\else\\draw[fp]\\fi\\else\\ifnum#3=1\\draw[fn]\\else\\draw[tn]\\fi\\fi}"
 	       << "\n\\begin{document}\n\\begin{tikzpicture}[\nscale=10,nbase/.style={circle,draw},\nbase/.style={thick},\ntp/.style={green!50!black,line width=.5},"
 	       << "\ntn/.style={red!50!black,line width=.5,opacity=.1},\nfp/.style={line width=1,red},\nfn/.style={line width=.5,green!50!black,dotted},"
-	       << "\ntree/.style={blue,line width=3,opacity=.3,dashed},\nitree/.style={blue!70!green,line width=3,opacity=.5,dashed}]\n";      
+	       << "\ntree/.style={blue,line width=3,opacity=.3,dashed},\nitree/.style={blue!50!red,line width=4,opacity=.3}]\n";      
     }
     
     ~GlobalSfM_Graph_Cleaner(){
       tikzfile << "\\end{tikzpicture}\n\\end{document}";
       tikzfile.close();
     };
+    
+    void set_error_valid_thres( double val ){error_valid_thres = val;}
+    void set_default_max_error( double val ){default_max_error = val;}
+    void set_nb_steps_skip( int val ){nb_steps_skip = val;}
+    void set_max_error_thres( int val ){max_error_thres = val;}
+    void set_error_cst( double val ){error_cst = val;}    
+    void set_max_descent_size( int val ){max_descent_size = val;}
+    void set_edge_inconsistency_thres( double val ){edge_inconsistency_thres = val;}
+    void set_number_tree( int val ){number_tree = val;}
+    
   ////////// // // /  /    /       /          /       /    /  / // // //////////
       
     RelativeInfo_Map run();
     
+  //private: TODO TODO TODO TODO
   ////////// // // /  /    /       /          /       /    /  / // // //////////
   //                              MISCELLANEOUS                               //
   ////////// // // /  /    /       /          /       /    /  / // // //////////
     
-    void change_Cohenrence( const int a, const int b ){ // TODO : improve speed
+    int get_Pair_Coherence( const Pair & a ) const {
+      if (CohenrenceMap.find(a) != CohenrenceMap.end())	{ return CohenrenceMap.at(a); }
+      return CohenrenceMap.at(std::make_pair(a.second, a.first));
+    }
+    
+    void change_Cohenrence( const int & a, const int & b ){ // TODO : improve speed
       if ( a != b ) {
 	for (std::map<Pair,int>::iterator iter = CohenrenceMap.begin(); iter != CohenrenceMap.end();  ++iter) {
 	  if ( iter->second == a ) { iter->second = b; }
@@ -333,7 +360,7 @@ class GlobalSfM_Graph_Cleaner
       }
       return maxkey;
     }
-    void change_Cohenrence( const Pair a, const Pair b ){
+    void change_Cohenrence( const Pair & a, const Pair & b ){
       int ca;
       if (CohenrenceMap.find(a) != CohenrenceMap.end())	{ ca = CohenrenceMap.at(a); }
       else { ca = CohenrenceMap.at(std::make_pair(a.second, a.first)); }
@@ -347,28 +374,28 @@ class GlobalSfM_Graph_Cleaner
   ////////// // // /  /    /       /          /       /    /  / // // //////////
   //                             PRIVATE FONCTION                             //    
   ////////// // // /  /    /       /          /       /    /  / // // //////////
-  //private: TODO TODO TODO TODO
-    // Relative transformation Map
+  
     RelativeInfo_Map relatives_Rt;
-    // Conherence Map code the cohenrent set of edges. 
     std::map< Pair, int > CohenrenceMap;
     
-    // Graph
-//    Graph g;
-    // Map to switch from IndexT to Node and Node to IndexT
-//    std::map<Graph::Node, IndexT> nodeMapIndex;
-//    std::map<IndexT, Graph::Node> indexMapNode;
-    // Map to switch from Pair to Edge
-//    std::map<Pair, Graph::Edge> pairMapEdge;
-
     // Adjacency map
     typedef std::map<IndexT, std::set<IndexT>> Adjacency_map;
     Adjacency_map adjacency_map;
     
     //
-    double error_thres;
+    int descent_max;
     int initial_tree_size;
-    
+    int nb_steps_skip;
+    int max_descent_size;
+    double error_thres;                // if error < error_thres, the edge is supposed to be consistent
+    double default_max_error;          // 10000
+    double max_error_thres;            // Error += min( error, max_error_thres );
+    double stop_thres;                 // Stop increasing tree
+    double error_valid_thres;          // If the edge is to good
+    double error_cst;                  // Error = (error_total + error_cst)
+    double edge_inconsistency_thres;   // If the best edge is to bad
+    int number_tree;
+
   ////////// // // /  /    /       /          /       /    /  / // // //////////
     
     Transformation inverse_transformation( const Transformation & T ) const{
@@ -432,14 +459,16 @@ class GlobalSfM_Graph_Cleaner
 	  const std::map<IndexT,Transformation> & globalTransformation,
 	  int & nbpos_i, int & nbneg_i) const;
     double edge_Consistency_Error(
-	  const Pair & pair,
-	  const Tree & tree,
-	  const std::set<IndexT> & tree_nodes,
+	  const IndexT & tree_node, const IndexT & new_node,
+	  const std::set<IndexT> & tree_node_set,
 	  const std::map<IndexT,Transformation> & globalTransformation,
-	  int & nbpos,
-	  int & nbneg) const;
+	  int & nbpos, int & nbneg, bool & edge_skip) const;
     
     void increase_Tree( Tree & tree ) const;
+    
+    std::map< IndexT, int > compute_distance(
+		const IndexT & new_node,
+		const std::set<IndexT> & tree_node_set) const;
     
   ////////// // // /  /    /       /          /       /    /  / // // //////////
   //                              DEBUG FUNCTION                              //
