@@ -293,10 +293,14 @@ class GlobalSfM_Graph_Cleaner
       nb_steps_skip = 0;
       max_error_thres = 20;
       error_cst = 5;
-      stop_thres = 200;
+      stop_thres = 100;
       max_descent_size = 10000;
       edge_inconsistency_thres = default_max_error;
-      number_tree = 1;
+      number_tree = 3;
+      tree_error_thres = .3;
+      asuma_coef = .1;
+      error_p = error_thres/(2*3.1415);
+      pre_edge_inconsistency_thres = 5;
       
       // DEBUG
       dbtalk = false;
@@ -320,7 +324,9 @@ class GlobalSfM_Graph_Cleaner
     void set_error_cst( double val ){error_cst = val;}    
     void set_max_descent_size( int val ){max_descent_size = val;}
     void set_edge_inconsistency_thres( double val ){edge_inconsistency_thres = val;}
+    void set_pre_edge_inconsistency_thres( double val ){pre_edge_inconsistency_thres = val;}
     void set_number_tree( int val ){number_tree = val;}
+    void set_tree_error_thres( double val ){tree_error_thres = val;}
     
   ////////// // // /  /    /       /          /       /    /  / // // //////////
       
@@ -374,7 +380,7 @@ class GlobalSfM_Graph_Cleaner
   ////////// // // /  /    /       /          /       /    /  / // // //////////
   //                             PRIVATE FONCTION                             //    
   ////////// // // /  /    /       /          /       /    /  / // // //////////
-  
+
     RelativeInfo_Map relatives_Rt;
     std::map< Pair, int > CohenrenceMap;
     
@@ -388,12 +394,16 @@ class GlobalSfM_Graph_Cleaner
     int nb_steps_skip;
     int max_descent_size;
     double error_thres;                // if error < error_thres, the edge is supposed to be consistent
+    double error_p;                    //  error_thres / 2 pi
     double default_max_error;          // 10000
     double max_error_thres;            // Error += min( error, max_error_thres );
     double stop_thres;                 // Stop increasing tree
     double error_valid_thres;          // If the edge is to good
     double error_cst;                  // Error = (error_total + error_cst)
     double edge_inconsistency_thres;   // If the best edge is to bad
+    double pre_edge_inconsistency_thres;   // 
+    double tree_error_thres;
+    double asuma_coef;                 // equal to alpha/(1-alpha) => consistency_error_edge
     int number_tree;
 
   ////////// // // /  /    /       /          /       /    /  / // // //////////
@@ -419,6 +429,33 @@ class GlobalSfM_Graph_Cleaner
       foo.insert(foo.end(), T1.path.begin(), T1.path.end());
     //std::cout << "\nListe finale : ";    for (std::list<IndexT>::const_iterator it=foo.begin(); it!=foo.end(); ++it){ std::cout << ' ' << *it;}
       return Transformation( T1.R * T2.R, T1.R * T2.t + T1.t, foo );
+    }
+    
+  ////////// // // /  /    /       /          /       /    /  / // // //////////    
+    
+    double consistency_error_tree( double error, int nbneg, int nbpos, int min_count, int nb_consistency ) const {
+      if( nb_consistency == 1 ){
+	return default_max_error;
+      }else if ( nb_consistency <= 2 ){
+	return ( 2 / double(min_count) ) * ( 1 + (error/error_cst) ) * ( max(nbneg-nbpos,0) + 1 )/( (nbpos + 1)*(nbpos + .01) ) + 1;
+      }else{
+	return ( 2 / double(min_count) ) * ( 1 + (error/error_cst) ) * ( max(nbneg-nbpos,0) + 1 )/( (nbpos + 1)*(nbpos + .01) );
+      }
+    }
+    double consistency_error_edge( double error, int nbneg, int nbpos ) const {
+//      return (error + error_cst) * (max(nbneg-nbpos,0)+1) / (nbpos+1);
+   // return ( 1 + (error/error_cst) ) * ( nbneg_i + 1 )/( (nbpos_i + 1)*(nbpos_i + .01) );
+   // return ( 1 + (error/error_cst) ) * ( max(nbneg-nbpos,0) + 1 )/( (nbpos + 1)*(nbpos + .01) );
+    return pow(1+asuma_coef*(1/error_p),1+(error/max_error_thres))/pow(1+asuma_coef*(1/(1-error_p)),nbpos);
+    }
+    
+    double primal_error_edge( double error ){
+      if( error < error_thres ){ return 1; }
+      else if ( error < max_error_thres ) { return .5; }
+      else { return 0;}      
+    }
+    double consistency_error_edge( double nbneg, double nbpos ) const {
+      return pow(1+asuma_coef*(1/error_p),1+nbneg)/pow(1+asuma_coef*(1/(1-error_p)),nbpos);
     }
     
   ////////// // // /  /    /       /          /       /    /  / // // //////////
@@ -448,11 +485,14 @@ class GlobalSfM_Graph_Cleaner
     void sequential_Tree_Reconstruction(
 		const Tree & tree,
 		std::map<IndexT,Transformation> & globalTransformation) const;
-    double tree_Consistency_Error( const Tree & tree, int & nbpos, int & nbneg ) const;
+    double tree_Consistency_Error( const Tree & tree, int & nbpos, int & nbneg, int & min_count ) const;
     
-    Tree generate_Consistent_Tree( const int size ) const;
+    Tree generate_Consistent_Tree( const int size, double & tree_error ) const;
 
-    void update_Coherence( const Tree & tree );
+    void update_Coherence( const Tree & tree, const Pair & ref_pair );    
+    void update_Coherence( const Tree & tree ){
+      update_Coherence( tree, *tree.begin());
+    }
     
     double edge_Descent_Error( const IndexT & t,
 	  Transformation T, const std::map< IndexT, int > & distance,

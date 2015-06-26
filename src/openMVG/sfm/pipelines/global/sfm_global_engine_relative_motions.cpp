@@ -146,25 +146,45 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Process() {
   std::cout << "\n---------------------\nCOMPUTE RELATIVE ROTATION..." << std::endl;
   Compute_Relative_Rotations(_relatives_Rt);
   
-  // 2 - Relative Rotation Inference
-  std::cout << "\n---------------------\nROTATION INFERENCE..." << std::endl;
+  // DEBUG
   {
+    std::cout << "\n---------------------\nDEBUG..." << std::endl;
+    std::set<IndexT> foo;
+    for(RelativeInfo_Map::const_iterator iter = _relatives_Rt.begin(); iter != _relatives_Rt.end(); ++iter){
+	foo.insert(iter->first.first);
+	foo.insert(iter->first.second);
+    }
+    int count = 0;
+    for(std::set<IndexT>::const_iterator iter = foo.begin(); iter != foo.end(); ++iter){
+      std::cout << "{"<< count << ">" << *iter <<"}";
+      count += 1;
+    }
+  }
+  // DEBUG
+  
+  // 2 - Relative Rotation Inference
+  std::cout << "\n---------------------\nROTATION INFERENCE (" << _relatives_Rt.size() << ") ..." << std::endl;
+      
     GlobalSfM_Graph_Cleaner graph_cleaner(_relatives_Rt);
+    graph_cleaner.set_error_valid_thres( .5 );
+    graph_cleaner.set_nb_steps_skip( 10 );
     RelativeInfo_Map old_relatives_Rt = graph_cleaner.run();
     old_relatives_Rt.swap(_relatives_Rt);
-  }
+    
   Log_Display_graph("cleaned_graph",_relatives_Rt); // GRAPH DISPLAY
 
   // 3 - Compute Global Rotation
-  std::cout << "\n---------------------\nGLOBAL ROTATION..." << std::endl;
+  std::cout << "\n---------------------\nGLOBAL ROTATION (" << _relatives_Rt.size() << ") ..." << std::endl;
   if (!Compute_Global_Rotations())
   {
     std::cerr << "GlobalSfM:: Rotation Averaging failure!" << std::endl;
     return false;
   }
   
+  old_relatives_Rt.swap(_relatives_Rt);
+    
   // 4 - Compute Global Translation
-  std::cout << "\n---------------------\nGLOBAL TRANSLATION..." << std::endl;
+  std::cout << "\n---------------------\nGLOBAL TRANSLATION (" << _relatives_Rt.size() << ") ..." << std::endl;
   if (!Compute_Global_Translations())
   {
     std::cerr << "GlobalSfM:: Translation Averaging failure!" << std::endl;
@@ -172,7 +192,7 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Process() {
   }
   
   // 5 - Compute triangulation of the 3D points
-  std::cout << "\n---------------------\nINITIAL TRIANGULATION..." << std::endl;
+  std::cout << "\n---------------------\nINITIAL TRIANGULATION (" << _relatives_Rt.size() << ") ..." << std::endl;
   if (!Compute_Initial_Structure())
   {
     std::cerr << "GlobalSfM:: Cannot initialize an initial structure!" << std::endl;
@@ -205,7 +225,24 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Process() {
       << "-------------------------------" << "<br>";
     _htmlDocStream->pushInfo(os.str());
   }
-
+  
+  // TIKZ_PLOT
+  const SfM_Data data = Get_SfM_Data();
+  const Poses poses = data.GetPoses();
+  std::set<IndexT> foo;
+  for(RelativeInfo_Map::const_iterator iter = _relatives_Rt.begin(); iter != _relatives_Rt.end(); ++iter){
+      foo.insert(iter->first.first);
+      foo.insert(iter->first.second);
+  }
+  for(std::set<IndexT>::const_iterator iter = foo.begin(); iter != foo.end(); ++iter){
+    if( poses.find(*iter) != poses.end() ){
+      const Vec3 center = poses.at(*iter).center();
+      std::cout <<  "\\node[nbase] (" << *iter << ") at (" << center(0) <<  ","<< center(2) << ") {" << *iter << "};";
+    } else {
+      std::cout << "\\coordinate  (" << *iter << ") at (\\dumx,\\dumy);";
+    }
+  }
+  
   return true;
 }
 
