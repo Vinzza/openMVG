@@ -19,39 +19,28 @@ using namespace openMVG;
 
 #include "openMVG/sfm/pipelines/global/sfm_global_engine_relative_motions.hpp"
 #include "openMVG/sfm/pipelines/global/GlobalSfM_graph_cleaner.hpp"
-#include "openMVG/sfm/pipelines/global/GlobalSfM_graph_cleaner2.hpp"
 
 int main(int argc, char **argv)
 {
   using namespace std;
   
   openMVG::system::Timer timer;
-  
-  
+    
   int n_views = 20;
   double wrong_edges_p = .1;
   double total_edge_p = 1;
   double min_angular_error = 30;
   double max_noise = 2;  
-  double error_thres = 5.;
-  int initial_tree_size = 5;
+  
   int ring_size = 0;
-  double error_cst = 5;
-  int number_tree = 1;
-  
-  int nb_cluster = 1;
   int min_ring_size = ring_size;
+  int nb_cluster = 1;
   double ring_ratio = 1;
-  double tree_error_thres = .3;
-  double max_error_thres = 20;
-  
-  int max_descent_size = 10000;
-  double edge_inconsistency_thres = 10000;
-  double pre_edge_inconsistency_thres = 5;
   
   
-  double asuma = 1;
-  
+  double formular_asuma_coef = .1;
+  double proba_error_pos_thres_over2pi = 0.0277;
+   
   CmdLine cmd;
   
   cmd.add( make_option('N', n_views, "nombreDeVues") );
@@ -65,25 +54,15 @@ int main(int argc, char **argv)
   cmd.add( make_option('n', nb_cluster, "nbCluster") );
   cmd.add( make_option('S', ring_ratio, "ringRatio") );
   
-  cmd.add( make_option('s', initial_tree_size, "initialTreeSize") );
-  cmd.add( make_option('t', error_thres, "seuilErreur") );
-  cmd.add( make_option('c', error_cst, "errorCst") );
-  cmd.add( make_option('z', max_descent_size, "maxDescentSize") );
-  cmd.add( make_option('y', edge_inconsistency_thres, "edgeInconsistencyThres") );
-  cmd.add( make_option('Y', pre_edge_inconsistency_thres, "preEdgeInconsistencyThres") );
-  cmd.add( make_option('x', number_tree, "numberTree") );
-  
-  cmd.add( make_option('T', tree_error_thres, "treeErrorThres") );
-  
-  
-  cmd.add( make_option('A', asuma, "alphaCoef") );
-  
-  
-  
+  cmd.add( make_option('Z', formular_asuma_coef, "asuma") );
+  cmd.add( make_option('Y', proba_error_pos_thres_over2pi, "podp") );
+    
   cmd.process(argc, argv);
   
   min_angular_error = D2R(min_angular_error);
   max_noise = D2R(max_noise);
+  
+  formular_asuma_coef = formular_asuma_coef / (1-formular_asuma_coef);
   
   std::cout << std::endl
     << "-----------------------------------------------------------\n"
@@ -96,14 +75,8 @@ int main(int argc, char **argv)
     << "Bruit : " << R2D(max_noise) << std::endl
     << "Erreur angulaire minimum des mauvaises correspondances : " << R2D(min_angular_error) << std::endl
     << "Taille de l'anneau : [" << nb_cluster << "x] " << ring_size << " (" << 100*ring_ratio << "%) " << min_ring_size  << " (" << 100*(1-ring_ratio) << "%) " << std::endl
+    << "-----------------------------------------------------------\n"
     << std::endl
-    << "Seuil d'erreur : " << error_thres << std::endl
-    << "Constante d'erreur : " << error_cst << std::endl
-    << "Taille d'arbre initial : " << initial_tree_size << std::endl
-    << "Descente maximale : " << max_descent_size << std::endl
-    << "Seuil d'arête d'incrémentation : " << edge_inconsistency_thres << std::endl
-    << "Nombre d'arbres : " << number_tree << std::endl
-    << "Asuma Coef : " << asuma << std::endl
     << "-----------------------------------------------------------"<<std::endl;
         
   //---------------------------------------
@@ -179,7 +152,6 @@ int main(int argc, char **argv)
   int r_count; // width of the current position
   bool c_foo=true;  // true if the current position is in a cluster
   int r_length = int((ring_ratio * double(n_views)) / double(nb_cluster)); // length of the cluster left
-  std::cout << "LENGTH = " << ring_ratio * double(n_views) << " / " << nb_cluster << " = " << (ring_ratio * double(n_views)) / double(nb_cluster) << " = " << r_length << std::endl;
   
   if( ring_size >= 0 ){
     for( IndexT i = 0; i < n_views; i++ ){
@@ -190,8 +162,6 @@ int main(int argc, char **argv)
 	r_count = min(ring_size,max(r_length,min_ring_size));
       else
 	r_count = min_ring_size;
-      
-      std::cout << i << " : (" << r_length << ") " << r_count;if(c_foo){std::cout<<" BIG"<<std::endl;}else{std::cout<<" SMALL"<<std::endl;}
       
       if( r_length <= 0 ){
 	if(c_foo){r_length = int(((1-ring_ratio) * double(n_views)) / double(nb_cluster)); c_foo=false;}
@@ -229,50 +199,35 @@ int main(int argc, char **argv)
 
   
   
-  sfm::GlobalSfM_Graph_Cleaner graph_cleaner(map_relative, error_thres, initial_tree_size);
-    // graph_cleaner.set_error_valid_thres( val );
-    // graph_cleaner.set_default_max_error( val );
-    // graph_cleaner.set_nb_steps_skip( val );
-    // graph_cleaner.set_max_error_thres( val );
-    graph_cleaner.set_error_cst( error_cst );
-    graph_cleaner.set_max_descent_size( max_descent_size );
-    graph_cleaner.set_edge_inconsistency_thres( edge_inconsistency_thres );
-    graph_cleaner.set_number_tree( number_tree );
-    graph_cleaner.set_tree_error_thres( tree_error_thres );
-    graph_cleaner.set_pre_edge_inconsistency_thres( pre_edge_inconsistency_thres );
-    
-    double foop = error_thres/(2*3.1415);
-    
+  sfm::GlobalSfM_Graph_Cleaner graph_cleaner(map_relative);
+      
     cout.precision(3);
     std::cout << "\n\n\nTABLEAUX (=> Rapport)";
     for( int nbneg = 0; nbneg<=20; nbneg++ ){
       std::cout << nbneg << "&";
       for( int nbpos = 0; nbpos<=10; nbpos++ ){
-//	double foo = initial_tree_size * ( 1 + ((max_error_thres*nbneg + (error_thres/2)*nbpos)/error_cst) ) * ( max(nbneg-nbpos,0) + 1 )/( (nbpos + 1)*(nbpos + .01) );
-//	double foo = initial_tree_size * ( 1 + ((max_error_thres*nbneg + (error_thres/2)*nbpos)/error_cst) ) * ( nbneg + 1 )/( (nbpos + 1)*(nbpos + .01) );
-	double bar = max_error_thres*nbneg + error_thres*nbpos;
-	double bar2 = error_thres*nbneg;
-	double foo = graph_cleaner.consistency_error_edge(bar, nbneg, nbpos);
-	double foo2 = graph_cleaner.consistency_error_edge(bar2, nbneg, nbpos);
 	
-	if( foo < .04 ) { std::cout << "\\textcolor{red!25}{$" << foo << "/" << foo2 << "$}";}
-	else if( foo < .2 ) { std::cout << "\\textcolor{red!50}{$" << foo << "/" << foo2 << "$}";}
-	else if( foo < 1 ) { std::cout << "\\textcolor{red}{$" << foo << "/" << foo2 << "$}";}
-	else if( foo < 5 ){ std::cout << "\\textcolor{red!50!black}{$" << foo << "/" << foo2 << "$}";}
-	else if( foo < 25 ){ std::cout << "\\textcolor{red!25!black}{$" << foo << "/" << foo2 << "$}";}
-	else{ std::cout << "$" << foo << "/" << foo2 << "$";}
+	double foo = graph_cleaner.formule_asuma(nbpos, nbneg);
+	
+	if( foo < .16 ) { std::cout << "\\textcolor{red!25}{$" << foo << "$}";}
+	else if( foo < .33 ) { std::cout << "\\textcolor{red!50}{$" << foo << "$}";}
+	else if( foo < .5 ) { std::cout << "\\textcolor{red}{$" << foo << "$}";}
+	else if( foo < .66 ){ std::cout << "\\textcolor{red!50!black}{$" << foo << "$}";}
+	else if( foo < .83 ){ std::cout << "\\textcolor{red!25!black}{$" << foo << "$}";}
+	else{ std::cout << "$" << foo << "$";}
 	if(nbpos<10){std::cout << "&";} else {std::cout << "\\\\";}
 
       }
       std::cout << "\n";
     }
+    std::cout << "\n\n ERR = " << 1+formular_asuma_coef/(1-proba_error_pos_thres_over2pi) << "^{nbneg} / " << 1+formular_asuma_coef/proba_error_pos_thres_over2pi << "^{nbpos}\n\n";
     cout.precision(6);
   // err = ( 2 / double(min_count) ) * size * ( 1 + (tree_err/error_cst) ) * ( max(nbneg-nbpos,0) + 1 )/( (nbpos + 1)*(nbpos + .01) );
     
   graph_cleaner.set_position_groundtruth(C_global);
   graph_cleaner.set_wrong_edges(wrong_edges);
   std::cout << "-----------------------------------------------------------\n---- Cleaning Graph" << std::endl;
-  std::cout << "-----------------------------------------------------------" << std::endl;
+  std::cout << "----------------------------------------------------------" << std::endl;
   RelativeInfo_Map old_relatives_Rt = graph_cleaner.run();
   
   std::cout << " Total time took (s): " << timer.elapsed() << std::endl;

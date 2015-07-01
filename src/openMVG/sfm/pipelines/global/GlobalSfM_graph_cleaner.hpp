@@ -8,13 +8,6 @@
 #define GLOBALSFM_GRAPH_CLEANER_HPP
 
 
-namespace openMVG{
-namespace sfm{
-
-
-} // namespace sfm
-} // namespace openMVG
-
 #include "openMVG/sfm/sfm.hpp"
 #include "openMVG/graph/graph.hpp"
 #include "openMVG/multiview/rotation_averaging_common.hpp"
@@ -24,87 +17,7 @@ namespace sfm{
 namespace openMVG{
 namespace sfm{
 
-////////////////////////////////////////////////////////////////////////////////
-//                                   Cycle                                    //
-////////////////////////////////////////////////////////////////////////////////
-struct Cycle
-{
-  Cycle(const std::vector<Pair> & ccycle)
-    :cycle(ccycle)
-  { }
-
-  std::vector<Pair> cycle;
   
-
-  bool contain(const Pair & edge) const {
-    return (std::find(cycle.begin(), cycle.end(), edge) != cycle.end());
-  }
-  
-  void reverse() {
-    std::reverse( cycle.begin()+1, cycle.end() );
-    for ( std::vector<Pair>::iterator iter = cycle.begin(); iter != cycle.end(); ++iter ){
-      Pair & p = *iter;
-      p = std::make_pair( p.second, p.first );
-    }
-  }
-  
-  float errToIdentity( const RelativeInfo_Map & relatives_Rt ) const{
-    Mat3 rot_To_Identity = Mat3::Identity();
-    
-    for ( std::vector<Pair>::const_iterator iter=cycle.begin(); iter!=cycle.end(); ++iter ){
-      const Pair p = *iter;
-      Mat3 RIJ;
-      if (relatives_Rt.find(p) != relatives_Rt.end())
-	RIJ = relatives_Rt.at(p).first;
-      else
-	RIJ = relatives_Rt.at( make_pair(p.second,p.first) ).first.transpose();
-      rot_To_Identity = RIJ * rot_To_Identity;
-    }
-    return static_cast<float>(R2D(getRotationMagnitude(rot_To_Identity)));
-  }
-  
-  ////////// // // /  /    /       /          /       /    /  / // // //////////
-
-  friend bool operator==(const Cycle& c1, Cycle& c2)  {
-    std::vector<Pair> cycle2 = c2.cycle;
-    Pair edge0 = c1.cycle[0];
-    std::vector<Pair>::iterator p = std::find( cycle2.begin(), cycle2.end(), edge0 );
-    if ( cycle2.end() != p ) {
-      std::rotate( cycle2.begin(), p, cycle2.end() );
-      return cycle2 == c1.cycle;
-    }
-    p = std::find( cycle2.begin(), cycle2.end(), std::make_pair( edge0.second, edge0.first ) );
-    if ( cycle2.end() != p ){
-      std::rotate( cycle2.begin(), p, cycle2.end() );
-      c2.reverse();
-      return cycle2 == c1.cycle;
-    }
-    return false;
-  }
-  
-  friend bool operator!=(const Cycle& c1, Cycle& c2)  {
-    return !(c1 == c2);
-  }
-
-  
-  friend std::ostream & operator<<(std::ostream & os, const Cycle & c)
-  {
-    os << c.cycle[0].first;
-    for (int i = 0; i < c.cycle.size(); ++i){
-      os << "--" << c.cycle[i].second << " ";
-    }
-    os << std::endl;
-    return os;
-  }
-  
-}; // Struct Cycle
-
-
-typedef std::vector< Cycle > Cycles;
-
-typedef lemon::ListGraph Graph;
-typedef std::set<Pair> Tree;
-
 ////////////////////////////////////////////////////////////////////////////////
 //                               TRANSFORMATION                               //
 //////////////////////////////////////////////////////////////////////////////// 
@@ -113,6 +26,7 @@ struct Transformation {
 public:
 
   Transformation():R(Mat3::Identity()),t(Vec3::Zero()) {}
+  
   Transformation( std::pair<Mat3,Vec3> nt, Pair np ): R(nt.first), t(nt.second) {
     path.push_back(np.first);    path.push_back(np.second);
   }
@@ -124,10 +38,37 @@ public:
 	  t(- nt.first.transpose()*nt.second) {
       path.push_back(np.second);    path.push_back(np.first);
   }
+  
+  Transformation( const RelativeInfo_Map & relatives_Rt, IndexT ns, IndexT nt ){
+    if (relatives_Rt.find(std::make_pair(ns,nt)) != relatives_Rt.end()){
+      const std::pair<Mat3, Vec3> foo = relatives_Rt.at(std::make_pair(ns,nt));
+      R = foo.first;      t = foo.second;
+    } else {
+      const std::pair<Mat3, Vec3> foo = relatives_Rt.at(std::make_pair(nt,ns));
+      R = foo.first.transpose();      t = - R*foo.second;
+    }
+    path.clear();       path.push_back(ns);    path.push_back(nt);
+  }
+  
+  void inverse(){
+      R = R.transpose();
+      t = - R*t;
+      path.reverse();
+  }
+  
+  
+  void load_transformation( const RelativeInfo_Map & relatives_Rt, IndexT ns, IndexT nt ){
+    if (relatives_Rt.find(std::make_pair(ns,nt)) != relatives_Rt.end()){
+      const std::pair<Mat3, Vec3> foo = relatives_Rt.at(std::make_pair(ns,nt));
+      R = foo.first;      t = foo.second;
+    } else {
+      const std::pair<Mat3, Vec3> foo = relatives_Rt.at(std::make_pair(nt,ns));
+      R = foo.first.transpose();      t = - R*foo.second;
+    }
+    path.clear();       path.push_back(ns);    path.push_back(nt);
+  }
+  
 
-  Mat3 R;
-  Vec3 t;
-  std::list<IndexT> path;  
   // (TODO:L)-> Clean the path when compose
   void compose_left( const Transformation & T ){
     R = T.R * R;    t = T.R * t + T.t;
@@ -171,15 +112,16 @@ public:
   }
 
   void clean_path(){
+
     std::list<IndexT> cpath;
     IndexT foo1, foo2, foo3, foo4;
+    
     if( path.empty() ){ return; }
     foo1 = path.front();    path.pop_front();    foo2 = path.front();    path.pop_front();
     if( path.empty() ){ path.push_back(foo1); path.push_back(foo2); return; }
     foo3 = path.front();    path.pop_front();    foo4 = path.front();    path.pop_front();
-        
-    if( foo2 != foo3 )
-      throw "The path is not a real path...";
+
+    if( foo2 != foo3 ){ throw "The path is not a real path..."; }
     while( !path.empty() ){
       if( foo1 != foo4 ){
 	cpath.push_back(foo1);	cpath.push_back(foo2);
@@ -194,26 +136,109 @@ public:
       }
       if( path.empty() ){ cpath.push_back(foo1); cpath.push_back(foo2); path = cpath; return;}
       foo3 = path.front();    path.pop_front();      foo4 = path.front();    path.pop_front();
-    }
+    } // while
     cpath.push_back(foo1);	cpath.push_back(foo2);		cpath.push_back(foo3);	cpath.push_back(foo4);
     
     path = cpath;
   }
   
-  double error(){
+  double error() {
     clean_cycle_path();
     clean_path();
     const int L = path.size();
-    // std::cout << "Erreur chemin = ";    for (std::list<IndexT>::const_iterator it=path.begin(); it!=path.end(); ++it){ std::cout << ' ' << *it;}
-    // std::cout << std::endl;
-    if (L == 0)
-      return 0.; 
+    if (L == 0){ return 0.; }
     return (2.44948974278 * R2D(getRotationMagnitude(R)) / sqrt(L));  // 2.44948974278 = sqrt(3*2)
   }
   
-  void print_path(){
+  void print_path() const {
     for (std::list<IndexT>::const_iterator it=path.begin(); it!=path.end(); ++it){ std::cout << ' ' << *it;}
   }
+  
+  Mat3 get_R() const { return R; }
+  Vec3 get_t() const { return t; }
+  std::list<IndexT> get_path() const { return path; }
+  Pair get_path_ends() const { return std::make_pair( path.front(), path.back() ); }
+  
+  private:
+  
+    Mat3 R;
+    Vec3 t;
+    std::list<IndexT> path;  
+  
+};
+
+////////////////////////////////////////////////////////////////////////////////
+//                                    TREE                                    //
+//////////////////////////////////////////////////////////////////////////////// 
+
+
+struct Tree {
+
+  public:
+    Tree(){}
+    Tree(const IndexT & i){
+	indexT_set.insert(i);
+	global_transformation[i] = Transformation();
+    }
+    
+    void print() const {
+      for (std::set<Pair>::const_iterator iter = pair_set.begin(); iter != pair_set.end(); ++iter)
+	std::cout << iter->first << "-" << iter->second << " ";
+    }
+    void print_node() const {
+      for (std::set<IndexT>::const_iterator iter = indexT_set.begin(); iter != indexT_set.end(); ++iter)
+	std::cout << *iter << " ";
+    }
+    
+    int size() const { return indexT_set.size(); };
+    
+    void insert( const Pair & p ){
+	pair_set.insert(p);
+	indexT_set.insert(p.first);
+	indexT_set.insert(p.second);
+    }
+    void insert( const Pair & p, Transformation T ){
+	pair_set.insert(p);	indexT_set.insert(p.first);	indexT_set.insert(p.second);
+	if( global_transformation.find(p.first) != global_transformation.end() ){
+	  T.compose_right( global_transformation.at(p.first) );
+	  global_transformation[p.second] = T;
+	} else {
+	  T.inverse();
+  	  T.compose_right( global_transformation.at(p.second) );
+	  global_transformation[p.first] = T;
+	}
+	
+    }
+    bool contains( const Pair & p ) const {
+      return ( (pair_set.find(p)!=pair_set.end()) ||
+               (pair_set.find( std::make_pair(p.second,p.first) )!=pair_set.end()) );
+    }
+    bool contains( const IndexT & i ) const {
+      return ( indexT_set.find(i) != indexT_set.end() );
+    }
+        
+    double transformation_error( Transformation T ) const {
+      Pair st = T.get_path_ends();
+      if( contains(st.first) && contains(st.second) ){
+	T.compose_right( global_transformation.at(st.first) );
+	T.compose_left_rev( global_transformation.at(st.second) );
+	const double err = T.error();
+	return err;
+      }
+      throw "The transformation's error can't be computed.";
+    }
+    
+    void initialise_transformation( const RelativeInfo_Map & relatives_Rt);
+    
+    std::set<IndexT> get_indexT_set() const { return indexT_set; }
+    std::set<Pair> get_pair_set() const { return pair_set; }
+    std::map<IndexT,Transformation> get_global_transformation() const { return global_transformation; }
+    
+  private:
+    std::set<Pair> pair_set;
+    std::set<IndexT> indexT_set;
+    std::map<IndexT,Transformation> global_transformation;
+  
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -221,89 +246,54 @@ public:
 //////////////////////////////////////////////////////////////////////////////// 
 
 class GlobalSfM_Graph_Cleaner
-{  /*
-  CONSTRUCTORS:
-    GlobalSfM_Graph_Cleaner( RelativeInfo_Map )
-
-  UTILS:
-    inverse_transformation( T ) : return the inverse of the transformation
-    get_transformation( Pair ) : return the local transformation of the Pair    
-    compose_transformation( T1, T2 ) : return the composition : T1 o T2
-    
-    change_Cohenrence( int, int )
-    - - - - - - - - -( Pair, Pair ) : set the two Pair to the same consistent value
-    update_Coherence( tree ) : update the CohenrenceMap
-    principale_Coherence() : return the int corresponding to the biggest coherent part
-                     
-    sequential_Tree_Reconstruction( tree, globalTransformation ) : build the globalTransformation sequentially with the tree
-    
-  PROCESS:
-    run() : run the cleaning process
-    
-    addCycleToMap( Cycle, RelativeInfo_Map ) : add the cycle to the RelativeInfo_Map
-    findCycles() : return a vector of Cycles (only triplets for now)
-    rotationRejection( max_angular_error, Cycles ) : keep only the edges which are in a consistent cycle.
-    
-    generate_Random_Tree( size(int) ) : return a random tree with a given size
-    tree_Consistency_Error( tree, nbpos, nbneg ) : return the error and set nbneg/nbpos to the number of incoherent/coherent cycles.
-    generate_Consistent_Tree( size(int) ) : return a consistent tree with a given size
-    edge_Consistency_Error( pair, tree, tree_nodes  ) : return the consistency error made by the pair according to the tree
-    increase_Tree( tree ) : add a consistent edge to the tree
-    
-  DEBUG:
-    set_position_groundtruth( vector<Vect3> ) : set the position groundtruth for the disp_Graph function
-    set_wrong_edges( set<Pair> ) : set the groundtruth wrond_edges_set for the disp_Graph function
-    disp_Graph( string ) : display the graph in a TikZ format               
-    
-  */
+{  
   public:
     
   ////////// // // /  /    /       /          /       /    /  / // // //////////
-  //                               CONSTRUCTORS                               //    
+  //                               CONSTRUCTORS                               //
   ////////// // // /  /    /       /          /       /    /  / // // //////////
-    GlobalSfM_Graph_Cleaner(const RelativeInfo_Map & map_relat, const double & error_thres = 5., const int & initial_tree_size = 7)
-    :relatives_Rt(map_relat), error_thres(error_thres), initial_tree_size(initial_tree_size) {
+  
+    
+    GlobalSfM_Graph_Cleaner(const RelativeInfo_Map & map_relat) : relatives_Rt(map_relat) {
       // Build SetNodes
       std::set<IndexT> setNodes;
-      std::cout << "Graph initialisation:" << std::endl;
+      std::cout << "Graph Initialisation:" << std::endl;
       for(RelativeInfo_Map::const_iterator iter = map_relat.begin(); iter != map_relat.end(); ++iter) {
 	setNodes.insert(iter->first.first);	setNodes.insert(iter->first.second);      }
-      std::cout << "Nodes:";
-      // Build association beetween Node and indexT
-//      for (std::set<IndexT>::const_iterator iter = setNodes.begin(); iter != setNodes.end(); ++iter) {
-//	indexMapNode[*iter] = g.addNode();      nodeMapIndex[ indexMapNode[*iter] ] = *iter;
-//	std::cout << " " << g.id(indexMapNode[*iter]);
-//      }      
+      
       // Add the edge
-      int count = 0;
-      std::cout << "\nEdges:";
       for(RelativeInfo_Map::const_iterator iter = map_relat.begin(); iter != map_relat.end(); ++iter) {
 	const Pair p = std::make_pair(iter->first.first, iter->first.second);
 	// Initialisation of PairMapEdge
-//	pairMapEdge[p] = g.addEdge(indexMapNode[p.first], indexMapNode[p.second]);
 	adjacency_map[p.first].insert(p.second);
 	adjacency_map[p.second].insert(p.first);
-	std::cout << " (" << p.first << "," << p.second << ")[" << count << "]";      
-	CohenrenceMap[p] = count; count+=1; }  // Initialisation of conherencMap
-      std::cout << "\ninitialisation end\n" << std::endl;
-
-      descent_max = 1000;
-      default_max_error = 10000;
-      error_valid_thres = -1;
-      nb_steps_skip = 0;
-      max_error_thres = 20;
-      error_cst = 5;
-      stop_thres = 100;
-      max_descent_size = 10000;
-      edge_inconsistency_thres = default_max_error;
-      number_tree = 3;
-      tree_error_thres = .3;
-      asuma_coef = .1;
-      error_p = error_thres/(2*3.1415);
-      pre_edge_inconsistency_thres = 5;
+	edge_consistency_map[p] = std::make_pair(.5,0);
+      }  // Initialisation of conherencMap
       
-      // DEBUG
-      dbtalk = false;
+	  
+      initial_tree_size = 7;
+      initial_tree_ransac_nb = 10000;
+      
+      default_max_error = 10000;
+      
+      proba_error_positivethres = 5;
+      proba_error_negativethres = 20; 
+      proba_error_pos_thres_over2pi = proba_error_positivethres / 180;
+      formular_asuma_coef = .1;
+      
+      formule_normalization_coef = log(1+formular_asuma_coef/proba_error_pos_thres_over2pi)
+				  /log(1+formular_asuma_coef/(1-proba_error_pos_thres_over2pi));
+      
+      proba_neutral = 1/(1+formule_normalization_coef);
+      stop_descent_number = 1000;
+      
+      coherence_thres = .5;
+      
+      tree_increment_stop_thres = 0;
+      dbtalk = 1;
+
+      std::cout << "Proba_neutral = " << proba_neutral << std::endl;
+      
       tikzfile.open ("graphe.tex");
       tikzfile << "\\documentclass[tikz]{standalone}\n"
 	       << "\\def\\zdraw[#1][#2][#3]{\\ifnum#2=\\componentchoice\\ifnum#3=1\\draw[tp]\\else\\draw[fp]\\fi\\else\\ifnum#3=1\\draw[fn]\\else\\draw[tn]\\fi\\fi}"
@@ -312,217 +302,35 @@ class GlobalSfM_Graph_Cleaner
 	       << "\ntree/.style={blue,line width=3,opacity=.3,dashed},\nitree/.style={blue!50!red,line width=4,opacity=.3}]\n";      
     }
     
+    
+    
     ~GlobalSfM_Graph_Cleaner(){
       tikzfile << "\\end{tikzpicture}\n\\end{document}";
       tikzfile.close();
     };
     
-    void set_error_valid_thres( double val ){error_valid_thres = val;}
-    void set_default_max_error( double val ){default_max_error = val;}
-    void set_nb_steps_skip( int val ){nb_steps_skip = val;}
-    void set_max_error_thres( int val ){max_error_thres = val;}
-    void set_error_cst( double val ){error_cst = val;}    
-    void set_max_descent_size( int val ){max_descent_size = val;}
-    void set_edge_inconsistency_thres( double val ){edge_inconsistency_thres = val;}
-    void set_pre_edge_inconsistency_thres( double val ){pre_edge_inconsistency_thres = val;}
-    void set_number_tree( int val ){number_tree = val;}
-    void set_tree_error_thres( double val ){tree_error_thres = val;}
     
   ////////// // // /  /    /       /          /       /    /  / // // //////////
-      
+  //                             CHANGE PARAMETER                             //
+  ////////// // // /  /    /       /          /       /    /  / // // //////////
+    
+  void set_initial_tree_size( int v ){ initial_tree_size = v; }
+  void set_initial_tree_ransac_nb( int v ){ initial_tree_ransac_nb = v; }
+  void set_default_max_error( double v ){ default_max_error = v; }
+  void set_proba_error_positivethres( double v ){ proba_error_positivethres = v; }
+  void set_proba_error_negativethres( double v ){ proba_error_negativethres = v; }
+  void set_stop_descent_number( int v ){ stop_descent_number = v; }
+  void set_formular_asuma_coef( double v ){ formular_asuma_coef = v; }
+  void set_tree_increment_stop_thres( double v ){ tree_increment_stop_thres = v; }
+  
+  ////////// // // /  /    /       /          /       /    /  / // // //////////
+  //                                  OTHERS                                  //
+  ////////// // // /  /    /       /          /       /    /  / // // //////////
+    
     RelativeInfo_Map run();
-    
-  //private: TODO TODO TODO TODO
-  ////////// // // /  /    /       /          /       /    /  / // // //////////
-  //                              MISCELLANEOUS                               //
-  ////////// // // /  /    /       /          /       /    /  / // // //////////
-    
-    int get_Pair_Coherence( const Pair & a ) const {
-      if (CohenrenceMap.find(a) != CohenrenceMap.end())	{ return CohenrenceMap.at(a); }
-      return CohenrenceMap.at(std::make_pair(a.second, a.first));
-    }
-    
-    void change_Cohenrence( const int & a, const int & b ){ // TODO : improve speed
-      if ( a != b ) {
-	for (std::map<Pair,int>::iterator iter = CohenrenceMap.begin(); iter != CohenrenceMap.end();  ++iter) {
-	  if ( iter->second == a ) { iter->second = b; }
-	}
-      }
-    }
-    int principale_Coherence() const{ // TODO : improve speed
-      std::map<int,int> foo;
-      for (std::map<Pair,int>::const_iterator iter = CohenrenceMap.begin(); iter != CohenrenceMap.end();  ++iter) {
-	if( foo.find(iter->second) == foo.end() )
-	  foo[iter->second] = 1;
-	else
-	  foo[iter->second] = foo[iter->second] + 1;
-      }
-      int maxint=0, maxkey;
-      for (std::map<int,int>::iterator iter = foo.begin(); iter != foo.end();  ++iter) {
-	if( iter->second > maxint ){
-	  maxint = iter->second;
-	  maxkey = iter->first;
-	}
-      }
-      return maxkey;
-    }
-    void change_Cohenrence( const Pair & a, const Pair & b ){
-      int ca;
-      if (CohenrenceMap.find(a) != CohenrenceMap.end())	{ ca = CohenrenceMap.at(a); }
-      else { ca = CohenrenceMap.at(std::make_pair(a.second, a.first)); }
 
-      if (CohenrenceMap.find(b) != CohenrenceMap.end())
-	change_Cohenrence( ca, CohenrenceMap.at(b));
-      else
-	change_Cohenrence( ca, CohenrenceMap.at(std::make_pair(b.second, b.first)));
-    }
     
-  ////////// // // /  /    /       /          /       /    /  / // // //////////
-  //                             PRIVATE FONCTION                             //    
-  ////////// // // /  /    /       /          /       /    /  / // // //////////
-
-    RelativeInfo_Map relatives_Rt;
-    std::map< Pair, int > CohenrenceMap;
-    
-    // Adjacency map
-    typedef std::map<IndexT, std::set<IndexT>> Adjacency_map;
-    Adjacency_map adjacency_map;
-    
-    //
-    int descent_max;
-    int initial_tree_size;
-    int nb_steps_skip;
-    int max_descent_size;
-    double error_thres;                // if error < error_thres, the edge is supposed to be consistent
-    double error_p;                    //  error_thres / 2 pi
-    double default_max_error;          // 10000
-    double max_error_thres;            // Error += min( error, max_error_thres );
-    double stop_thres;                 // Stop increasing tree
-    double error_valid_thres;          // If the edge is to good
-    double error_cst;                  // Error = (error_total + error_cst)
-    double edge_inconsistency_thres;   // If the best edge is to bad
-    double pre_edge_inconsistency_thres;   // 
-    double tree_error_thres;
-    double asuma_coef;                 // equal to alpha/(1-alpha) => consistency_error_edge
-    int number_tree;
-
-  ////////// // // /  /    /       /          /       /    /  / // // //////////
-    
-    Transformation inverse_transformation( const Transformation & T ) const{
-      std::list<IndexT> foo = T.path;
-      foo.reverse();
-	return Transformation( T.R.transpose(), - T.R.transpose()*T.t, foo );
-    }
-    
-    Transformation get_transformation( const Pair & pair ) const{
-      if (relatives_Rt.find(pair) != relatives_Rt.end())
-	return Transformation(relatives_Rt.at(pair), pair);
-      else
-	return Transformation(relatives_Rt.at( make_pair(pair.second,pair.first) ), make_pair(pair.second,pair.first), "inverse");
-    }
-    
-    Transformation compose_transformation( const Transformation & T1,
-					   const Transformation & T2 ) const{
-    //std::cout << "\nCOMPOSE_TRANSFORMATION\nListe initial : ";    for (std::list<IndexT>::const_iterator it=T1.path.begin(); it!=T1.path.end(); ++it){ std::cout << ' ' << *it;}
-    //std::cout << "\nListe rajoutée : ";    for (std::list<IndexT>::const_iterator it=T2.path.begin(); it!=T2.path.end(); ++it){ std::cout << ' ' << *it;}
-      std::list<IndexT> foo = T2.path;
-      foo.insert(foo.end(), T1.path.begin(), T1.path.end());
-    //std::cout << "\nListe finale : ";    for (std::list<IndexT>::const_iterator it=foo.begin(); it!=foo.end(); ++it){ std::cout << ' ' << *it;}
-      return Transformation( T1.R * T2.R, T1.R * T2.t + T1.t, foo );
-    }
-    
-  ////////// // // /  /    /       /          /       /    /  / // // //////////    
-    
-    double consistency_error_tree( double error, int nbneg, int nbpos, int min_count, int nb_consistency ) const {
-      if( nb_consistency == 1 ){
-	return default_max_error;
-      }else if ( nb_consistency <= 2 ){
-	return ( 2 / double(min_count) ) * ( 1 + (error/error_cst) ) * ( max(nbneg-nbpos,0) + 1 )/( (nbpos + 1)*(nbpos + .01) ) + 1;
-      }else{
-	return ( 2 / double(min_count) ) * ( 1 + (error/error_cst) ) * ( max(nbneg-nbpos,0) + 1 )/( (nbpos + 1)*(nbpos + .01) );
-      }
-    }
-    double consistency_error_edge( double error, int nbneg, int nbpos ) const {
-//      return (error + error_cst) * (max(nbneg-nbpos,0)+1) / (nbpos+1);
-   // return ( 1 + (error/error_cst) ) * ( nbneg_i + 1 )/( (nbpos_i + 1)*(nbpos_i + .01) );
-   // return ( 1 + (error/error_cst) ) * ( max(nbneg-nbpos,0) + 1 )/( (nbpos + 1)*(nbpos + .01) );
-    return pow(1+asuma_coef*(1/error_p),1+(error/max_error_thres))/pow(1+asuma_coef*(1/(1-error_p)),nbpos);
-    }
-    
-    double primal_error_edge( double error ){
-      if( error < error_thres ){ return 1; }
-      else if ( error < max_error_thres ) { return .5; }
-      else { return 0;}      
-    }
-    double consistency_error_edge( double nbneg, double nbpos ) const {
-      return pow(1+asuma_coef*(1/error_p),1+nbneg)/pow(1+asuma_coef*(1/(1-error_p)),nbpos);
-    }
-    
-  ////////// // // /  /    /       /          /       /    /  / // // //////////
-    
-    Cycles findCycles();
-    
-    void rotationRejection(const double max_angular_error, Cycles & vec_cycles);    
-    
-    void addCycleToMap( Cycle & c, RelativeInfo_Map & relatives_Rt_new ){
-      for ( std::vector<Pair>::iterator iter = c.cycle.begin(); iter != c.cycle.end(); ++iter ){
-	const Pair ij = *iter;	
-	if (relatives_Rt.find(ij) != relatives_Rt.end())
-	  relatives_Rt_new[ij] = relatives_Rt.at(ij);
-	else {
-	  const Pair ji = std::make_pair( ij.second, ij.first );
-	  relatives_Rt_new[ji] = relatives_Rt.at(ji);
-	}
-      }
-    }
-    
-    ////////////////////////////////////////////////////////////////////////////
-    //                                 TREES                                  //
-    ////////////////////////////////////////////////////////////////////////////
-
-
-    Tree generate_Random_Tree( const int size ) const;
-    void sequential_Tree_Reconstruction(
-		const Tree & tree,
-		std::map<IndexT,Transformation> & globalTransformation) const;
-    double tree_Consistency_Error( const Tree & tree, int & nbpos, int & nbneg, int & min_count ) const;
-    
-    Tree generate_Consistent_Tree( const int size, double & tree_error ) const;
-
-    void update_Coherence( const Tree & tree, const Pair & ref_pair );    
-    void update_Coherence( const Tree & tree ){
-      update_Coherence( tree, *tree.begin());
-    }
-    
-    double edge_Descent_Error( const IndexT & t,
-	  Transformation T, const std::map< IndexT, int > & distance,
-	  const std::map<IndexT,Transformation> & globalTransformation,
-	  int & nbpos_i, int & nbneg_i) const;
-    double edge_Consistency_Error(
-	  const IndexT & tree_node, const IndexT & new_node,
-	  const std::set<IndexT> & tree_node_set,
-	  const std::map<IndexT,Transformation> & globalTransformation,
-	  int & nbpos, int & nbneg, bool & edge_skip) const;
-    
-    void increase_Tree( Tree & tree ) const;
-    
-    std::map< IndexT, int > compute_distance(
-		const IndexT & new_node,
-		const std::set<IndexT> & tree_node_set) const;
-    
-  ////////// // // /  /    /       /          /       /    /  / // // //////////
-  //                              DEBUG FUNCTION                              //
-  ////////// // // /  /    /       /          /       /    /  / // // //////////
-    mutable bool dbtalk;
-    std::vector<Vec3> position_GroundTruth;
-    std::set<Pair> wrong_edges;
-    mutable ofstream tikzfile;
-    
-  // Display for TikZ
-    void disp_Graph(const string str) const;
-    
-  public:
-    
+    /* DEBUG DEBUG DEBUG */    
     void set_position_groundtruth( const std::vector<Vec3> & v ){
       position_GroundTruth = v;
       for(Adjacency_map::const_iterator iter = adjacency_map.begin(); iter != adjacency_map.end(); ++iter) {
@@ -533,6 +341,142 @@ class GlobalSfM_Graph_Cleaner
     void set_wrong_edges( const std::set<Pair> & s ){
       wrong_edges = s;
     }
+    void disp_Graph(const string str) const{
+      for(Adjacency_map::const_iterator iter = adjacency_map.begin();
+	  iter != adjacency_map.end(); ++iter) {
+	IndexT s = iter->first;
+	const std::set<IndexT> & indexT_set = iter->second;
+      
+	for (std::set<IndexT>::const_iterator iterT = indexT_set.begin();
+	    iterT != indexT_set.end(); ++iterT) {
+	  IndexT t = *iterT;
+	  if (s < t) {
+	    tikzfile << "\\zdraw["<< str << "]";
+	    if ( edge_consistency_map.find(std::make_pair(s,t)) != edge_consistency_map.end() )
+	      tikzfile << "[" << round(edge_consistency_map.at(std::make_pair(s,t))) << "]"; // TODO : round
+	    else
+	      tikzfile << "[" << round(edge_consistency_map.at(std::make_pair(t,s))) << "]"; // TODO : round
+	    if (wrong_edges.find(std::make_pair(s,t)) != wrong_edges.end() || wrong_edges.find(std::make_pair(t,s)) != wrong_edges.end() )
+	      tikzfile << "[0]";
+	    else
+	      tikzfile << "[1]";
+	    tikzfile << " (" << s << ") -- (" << t << "); ";
+	  } // if ( s < t )
+	} // for (iterT) in [indexT_set]
+      } // for (iter) in [adjacency_map]
+    }
+    
+    double formule_asuma( double nbpos, double nbneg ) const {
+      const double error = pow( 1+formular_asuma_coef/(1-proba_error_pos_thres_over2pi),nbneg)
+                         / pow( 1+formular_asuma_coef/  proba_error_pos_thres_over2pi  ,nbpos);
+      return 1/(1+ formule_normalization_coef * error);
+    }
+    
+    /* DEBUG DEBUG DEBUG */    
+    
+  private:
+    
+  ////////// // // /  /    /       /          /       /    /  / // // //////////
+  //                                 VARIABLE                                 //
+  ////////// // // /  /    /       /          /       /    /  / // // //////////
+    
+    typedef std::map<IndexT, std::set<IndexT>> Adjacency_map;
+
+    RelativeInfo_Map relatives_Rt;
+    Adjacency_map adjacency_map;
+    std::map<Pair, std::pair<double,int>> edge_consistency_map;
+    
+    /* DEBUG DEBUG DEBUG */
+    mutable int dbtalk;
+    std::vector<Vec3> position_GroundTruth;
+    std::set<Pair> wrong_edges;
+    mutable ofstream tikzfile;
+    /* DEBUG DEBUG DEBUG */    
+        
+  ////////// // // /  /    /       /          /       /    /  / // // //////////
+  //                                PARAMETERS                                //
+  ////////// // // /  /    /       /          /       /    /  / // // //////////
+  
+  double default_max_error;
+  
+  int initial_tree_size;  
+  int initial_tree_ransac_nb;
+    
+  double proba_error_positivethres;
+  double proba_error_negativethres;  
+  int stop_descent_number;
+  double tree_increment_stop_thres;
+  
+  double formule_normalization_coef;
+  double formular_asuma_coef;
+  
+  double coherence_thres;
+  
+  
+  double proba_error_pos_thres_over2pi;
+  double proba_neutral;
+    
+  
+  ////////// // // /  /    /       /          /       /    /  / // // //////////
+  //                                 FUNCTION                                 //
+  ////////// // // /  /    /       /          /       /    /  / // // //////////
+  
+  double cycle_probability( double error ) const {
+    if( error < proba_error_positivethres ){ return 1; }
+    else if( error < proba_error_negativethres )
+      return (proba_error_negativethres-error)/(proba_error_negativethres-proba_error_positivethres);
+    else { return 0; }
+  }
+  
+  //
+  
+  Tree generate_Random_Tree( const int size ) const;
+  double tree_Consistency_Error( Tree & tree, int & nbpos, int & nbneg, int & min_count ) const;
+  Tree generate_Consistent_Tree( const int size, double & tree_error ) const;
+
+  //
+  
+  std::map<IndexT,int> compute_distance(
+		const Pair & pair,
+		const std::set<IndexT> & tree_node_set) const;
+  
+  double edge_consistency_probability(
+	      const IndexT & source_node, const IndexT & target_node,
+	      Transformation T,
+	      const Tree & tree,
+	      const std::map< IndexT, int > & distance,
+	      int & nb_total, bool & edge_skip, double & nbpos_s, double & nb_s) const;
+	      
+  void increase_Tree( Tree & tree ) const;
+
+  //
+  
+  double get_coherence( const Pair & edge ) const {
+    if( edge_consistency_map.find(edge) != edge_consistency_map.end() ){
+	return edge_consistency_map.at(edge).first;
+    } else {
+	return edge_consistency_map.at(std::make_pair(edge.second, edge.first)).first;
+    }
+  }
+  
+  void update_coherence( const Pair & edge, double coherence ){
+    if( edge_consistency_map.find(edge) != edge_consistency_map.end() ){
+	edge_consistency_map[edge] = std::make_pair(coherence,1);
+    } else {
+	edge_consistency_map[std::make_pair(edge.second, edge.first)] = std::make_pair(coherence,1);
+    }
+  }  
+  void update_coherence( const Tree & tree ){        
+    for(RelativeInfo_Map::const_iterator iter = relatives_Rt.begin();
+	iter != relatives_Rt.end(); ++iter) {
+      if ( tree.contains( iter->first.first ) && tree.contains(iter->first.second) ) {
+	double foo = tree.transformation_error( Transformation( iter->second, iter->first ) );
+	foo = cycle_probability( foo );
+	update_coherence( iter->fist, foo );
+      }
+    }
+  }
+  
   ////////// // // /  /    /       /          /       /    /  / // // //////////
 };
 

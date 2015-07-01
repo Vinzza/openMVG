@@ -166,8 +166,8 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Process() {
   std::cout << "\n---------------------\nROTATION INFERENCE (" << _relatives_Rt.size() << ") ..." << std::endl;
       
     GlobalSfM_Graph_Cleaner graph_cleaner(_relatives_Rt);
-    graph_cleaner.set_error_valid_thres( .5 );
-    graph_cleaner.set_nb_steps_skip( 10 );
+//    graph_cleaner.set_error_valid_thres( .5 );
+//    graph_cleaner.set_nb_steps_skip( 10 );
     RelativeInfo_Map old_relatives_Rt = graph_cleaner.run();
     old_relatives_Rt.swap(_relatives_Rt);
     
