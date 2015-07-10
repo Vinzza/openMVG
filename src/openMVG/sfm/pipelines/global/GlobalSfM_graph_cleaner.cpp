@@ -22,6 +22,7 @@ using namespace openMVG::rotation_averaging;
 
 
 void Tree::initialise_transformation( const RelativeInfo_Map & relatives_Rt){
+  if( not global_transformation_needed ){ return; }
   std::list<IndexT> markedIndexT; // (TODO)-> : list<Pair> : the edges we still need to use
   global_transformation.clear();
   // root initialisation
@@ -51,6 +52,7 @@ void Tree::initialise_transformation( const RelativeInfo_Map & relatives_Rt){
     }
     markedIndexT.pop_front();
   }
+  global_transformation_needed = false;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -61,29 +63,65 @@ RelativeInfo_Map GlobalSfM_Graph_Cleaner::run()
 {
 
   double tree_error;
-  std::cout << "------------\nConstruction of the initial..." << std::endl;
-  Tree coherent_tree = generate_Consistent_Tree(initial_tree_size, tree_error);
   
-  std::set<Pair> foo = coherent_tree.get_pair_set();
-  for (std::set<Pair>::const_iterator iter = foo.begin(); iter != foo.end(); ++iter)
-    tikzfile << "\\draw[itree](" << iter->first << ")--(" << iter->second << ");"<<std::endl;
+  for( int k=0; k<number_tree; k++ ){
+    if(dbtalk>=0){std::cout << "\n------------\nConstruction of the " << k+1 << " initial..." << std::endl;}
+    Tree tree = generate_Consistent_Tree(initial_tree_size, tree_error);
+    
+	std::set<Pair> foo = tree.get_pair_set();
+	for (std::set<Pair>::const_iterator iter = foo.begin(); iter != foo.end(); ++iter)
+	  tikzfile << "\\draw[itree](" << iter->first << ")--(" << iter->second << ");"<<std::endl;
 
+    if(dbtalk>=0){std::cout << "------------\nEnlargement of the tree..." << std::endl;}
+    increase_Tree(tree);
+    
+	foo = tree.get_pair_set();
+	for (std::set<Pair>::const_iterator iter = foo.begin(); iter != foo.end(); ++iter)
+	  tikzfile << "\\draw[tree](" << iter->first << ")--(" << iter->second << ");"<<std::endl;
+    
+    if(dbtalk>=0){std::cout << "\n------------\nUpdate coherence..." << std::endl;}
+    edge_consistency_map.push_coherence();
+    tree_update_coherence( tree );
+    edge_consistency_map.push_coherence();
+  }
+    
+    /////////////////
+  
+  
+      tikzfile << "\n\\def\\componentchoice{" << round( 100 * coherence_thres ) << "}\n";
+      disp_Graph("base");
+      
+  int nb_i = relatives_Rt.size();
+  int nbneg_i = count_negatives();
+  int nbpos_i = nb_i - nbneg_i;
+      
+  if(dbtalk>=0){std::cout << "\n------------\nRemoving edges..." << std::endl;}
+  clean_graph( coherence_thres );
 
-  std::cout << "------------\nEnlargement of the tree..." << std::endl;
-  increase_Tree(coherent_tree);
+  int nb = relatives_Rt.size();
+  int nbneg = count_negatives();
+  int nbpos = nb - nbneg;
   
-  foo = coherent_tree.get_pair_set();
-  for (std::set<Pair>::const_iterator iter = foo.begin(); iter != foo.end(); ++iter)
-    tikzfile << "\\draw[tree](" << iter->first << ")--(" << iter->second << ");"<<std::endl;
+  if(dbtalk>=0){
+    std::cout << "\n-------------------------------------------\n----   STATISTICS\n\n"
+	      << "Number of edges before cleaning: " << nb_i << std::endl
+	      << "                after cleaning:  " << nb << std::endl;
+    if( nbneg_i > 0 ){
+    std::cout << "Number of positives:" << nbpos_i << " => " <<  nbpos << std::endl
+	      << "          negatives:" << nbneg_i << " => " <<  nbneg << std::endl;
+    }
+    std::cout << "\nEdges removed: " << nb_i-nb << " ( " << round(1000*(double(nb_i-nb))/double(nb_i))/10 << "% )" << std::endl;
+    if( nbneg_i > 0 ){
+    std::cout << "\nPositives removed: " << nbpos_i - nbpos << " ( " << round(1000*(double(nbpos))/double(nbpos_i))/10 << "% )" << std::endl;
+    std::cout << "\nNegatives removed: " << nbneg_i - nbneg << " ( " << round(1000*(double(nbneg_i-nbneg))/double(nbneg_i))/10 << "% )" << std::endl;
+    
+    std::cout << "  => " << round(1000*(double(nbpos))/double(nbpos_i))/10 << "\\%/" << round(1000*(double(nbneg_i-nbneg))/double(nbneg_i))/10 << "\\%" << std::endl;
+    }
+    std::cout << std::endl;
+  }
+    
   
-  
-  
-  tikzfile << "\n\\def\\componentchoice{0}\n";
-  disp_Graph("base");
-  
-  
-  RelativeInfo_Map new_relatives_Rt;
-  return new_relatives_Rt;
+  return relatives_Rt;
   
 } // function run
 
@@ -211,14 +249,18 @@ double GlobalSfM_Graph_Cleaner::tree_Consistency_Error( Tree & tree, int & nbpos
     for(std::set<IndexT>::const_iterator iter = tree_node_set.begin(); iter != tree_node_set.end(); ++iter) {
       distance[*iter] = 0;
       markedIndexT.push_back(*iter);
-    }
-
+    } /*
+    distance[pair.first] = 0;
+    markedIndexT.push_back(pair.first);
+    /**/
+    
     while (!markedIndexT.empty()){
       IndexT s = markedIndexT.front();
       const std::set<IndexT> adj_s = adjacency_map.at(s);      
       for(std::set<IndexT>::const_iterator iter = adj_s.begin(); iter != adj_s.end(); ++iter) {
 	IndexT t = *iter;
-	if( distance.find(t) == distance.end()
+	if( // t != pair.second &&       //3                              // WTF 
+	  distance.find(t) == distance.end()
 	 && (pair.first != s || pair.second != t)
 	 && (pair.first != t || pair.second != s) ) {
 	  distance[t] = distance.at(s)+1;
@@ -227,6 +269,8 @@ double GlobalSfM_Graph_Cleaner::tree_Consistency_Error( Tree & tree, int & nbpos
       }      
       markedIndexT.pop_front();
     }
+    // distance[pair.second] = 10000; //3
+    
     return distance;
 }
 
@@ -237,7 +281,7 @@ double GlobalSfM_Graph_Cleaner::edge_consistency_probability(
 	      Transformation T,
 	      const Tree & tree,
 	      const std::map< IndexT, int > & distance,
-	      int & nb_total, bool & edge_skip, double & nbpos_s, double & nb_s) const {
+	      int & nb_total, bool & edge_skip, double & nbpos_s, double & nb_s) {
 
   if(dbtalk>0){std::cout << "\n" << target_node << "[" << distance.at(target_node) << "]"; } /////////////////////////////////
 
@@ -248,7 +292,7 @@ double GlobalSfM_Graph_Cleaner::edge_consistency_probability(
   if( tree.contains(target_node) ){
     if(dbtalk>0){std::cout << "("; } /////////////////////////////////
     nb_total += 1;
-    const double foo = cycle_probability( tree.transformation_error( T ) );
+    double foo = cycle_probability( tree.transformation_error( T ) );
     if(dbtalk>0){std::cout << "path="; T.print_path(); std::cout << " : proba=" << foo << ")"; std::cout.flush();}
     return foo;
   }
@@ -260,14 +304,15 @@ double GlobalSfM_Graph_Cleaner::edge_consistency_probability(
   for( std::set<IndexT>::const_iterator iter = adj_t.begin(); iter != adj_t.end(); ++iter ) {      
     if( *iter != source_node && distance.at(*iter) < distance.at(target_node) ){
       nb += 1;
-      nbpos += edge_consistency_probability( target_node, *iter, T, tree, distance, nb_total, edge_skip, nbpos_s, nb_s );
+//      nbpos += edge_consistency_probability( target_node, *iter, T, tree, distance, nb_total, edge_skip, nbpos_s, nb_s );
+      nbpos += edge_consistency_map.mix_proba( std::make_pair(source_node, target_node), edge_consistency_probability( target_node, *iter, T, tree, distance, nb_total, edge_skip, nbpos_s, nb_s ) );
     }
   }
   
   // double error = pow(1+formular_asuma_coef/(1-proba_error_pos_thres_over2pi),nb-nbpos)
   //             / pow(1+formular_asuma_coef/proba_error_pos_thres_over2pi,nbpos);
   
-  const double error = formule_asuma( nbpos, nb-nbpos );
+  double error = formule_asuma( nbpos, nb-nbpos );
   
   if(dbtalk>0){std::cout << "\n  (" << nbpos << "/" << nb << ") p=" << error << ">"; } /////////////////////////////////
   
@@ -279,12 +324,14 @@ double GlobalSfM_Graph_Cleaner::edge_consistency_probability(
 
 ////////////////////////////////////////////////////////////////////////////////
 
-void GlobalSfM_Graph_Cleaner::increase_Tree( Tree & tree ) const {
+void GlobalSfM_Graph_Cleaner::increase_Tree( Tree & tree ) {
     int nb_total; double nbpos, nb;
     double proba, max_proba = 0;
-    Pair best_pair;
+    Pair best_pair, pair;
     bool edge_skip;
     IndexT new_node, source_node;
+    
+    tree.initialise_transformation( relatives_Rt );
 
     // Set the initial set of edges which could be add to the graph.
     std::map<Pair, int> edge_indic;
@@ -304,8 +351,7 @@ void GlobalSfM_Graph_Cleaner::increase_Tree( Tree & tree ) const {
       if(dbtalk>0){std::cout << "\n\nTree_nodes (" << tree.size() << ") = "; tree.print_node(); std::cout << std::endl;}
       
       for(std::map<Pair, int>::iterator iter = edge_indic.begin(); iter != edge_indic.end(); ++iter) {
-	Pair pair = iter->first;
-
+	pair = iter->first;
 
 	// Edge selection
 	if(tree.contains(pair.first) && not tree.contains(pair.second))
@@ -315,22 +361,24 @@ void GlobalSfM_Graph_Cleaner::increase_Tree( Tree & tree ) const {
 	else { edge_indic.erase(pair); continue;}
 
 	if( iter->second > 0 ) { iter->second -= 1; continue; }
-		
 	  
 	edge_skip = false;
 	nb_total = 0;
-	if(dbtalk>0){std::cout << "(" << source_node << "-" << new_node << "), "; } /////////////////////////////////
+	if(dbtalk>1){std::cout << "\n";}
+	if(dbtalk>0){std::cout << "## (" << source_node << "-" << new_node << "), "; } /////////////////////////////////
 	
-	std::map<IndexT,int> distance = compute_distance( best_pair, tree.get_indexT_set() );
+	std::map<IndexT,int> distance = compute_distance( std::make_pair(source_node, new_node), tree.get_indexT_set() );
 	
 	dbtalk--;
 	proba = edge_consistency_probability( source_node, new_node, Transformation(), tree, distance, nb_total, edge_skip, nbpos, nb );
 	dbtalk++;
 	
+	edge_consistency_map.update_coherence( pair, proba, proba );
+	
 	if( edge_skip ) { iter->second = 10; } // The computation was to slow
 	
 	if ( proba > max_proba ){ // We keep the extremum
-	  if(dbtalk>0){std::cout << "\n(" << source_node << "-" << new_node << ") = " << nbpos << "/" << nb-nbpos << " => " << proba << std::endl; } /////////////////////////////////
+	  if(dbtalk>0){std::cout << "\n(" << source_node << "-" << new_node << ") = " << nbpos << "/" << nb-nbpos << " => " << proba << "\n" << std::endl; } /////////////////////////////////
 	  max_proba = proba;
 	  best_pair = std::make_pair(source_node, new_node);
 	
@@ -339,7 +387,7 @@ void GlobalSfM_Graph_Cleaner::increase_Tree( Tree & tree ) const {
 	      if(dbtalk){std::cout << "Break" << std::endl;} // DBTALK
 	      break;
 	    }*/
-	  } // if
+	} // if
 
       } // for
       

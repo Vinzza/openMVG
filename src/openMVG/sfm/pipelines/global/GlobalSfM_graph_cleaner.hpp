@@ -179,6 +179,7 @@ struct Tree {
     Tree(const IndexT & i){
 	indexT_set.insert(i);
 	global_transformation[i] = Transformation();
+	global_transformation_needed = false;
     }
     
     void print() const {
@@ -196,6 +197,7 @@ struct Tree {
 	pair_set.insert(p);
 	indexT_set.insert(p.first);
 	indexT_set.insert(p.second);
+	global_transformation_needed = true;
     }
     void insert( const Pair & p, Transformation T ){
 	pair_set.insert(p);	indexT_set.insert(p.first);	indexT_set.insert(p.second);
@@ -228,7 +230,7 @@ struct Tree {
       throw "The transformation's error can't be computed.";
     }
     
-    void initialise_transformation( const RelativeInfo_Map & relatives_Rt);
+    void initialise_transformation( const RelativeInfo_Map & relatives_Rt );
     
     std::set<IndexT> get_indexT_set() const { return indexT_set; }
     std::set<Pair> get_pair_set() const { return pair_set; }
@@ -238,7 +240,113 @@ struct Tree {
     std::set<Pair> pair_set;
     std::set<IndexT> indexT_set;
     std::map<IndexT,Transformation> global_transformation;
+    bool global_transformation_needed;
   
+};
+
+////////////////////////////////////////////////////////////////////////////////
+//                              CONSISTENCY_MAP                               //
+//////////////////////////////////////////////////////////////////////////////// 
+
+
+struct Consistency_Map {
+
+  public:
+    Consistency_Map(){}
+    
+    Consistency_Map( const RelativeInfo_Map & map_relat ){
+      for(RelativeInfo_Map::const_iterator iter = map_relat.begin(); iter != map_relat.end(); ++iter) {
+	edge_map[iter->first] = std::make_pair(.5,0);
+	global_edge_map[iter->first] = std::make_pair(.5,0);
+      }
+    }
+    
+    void erase( const Pair & p ){
+	edge_map.erase(p);
+	global_edge_map.erase(p);
+    }
+    
+    void initialize( const Pair & p ){
+	edge_map[p] = std::make_pair(.5,0);
+	global_edge_map[p] = std::make_pair(.5,0);
+    }
+    
+    double get_coherence( const Pair & edge ) const {
+      if( global_edge_map.find(edge) != global_edge_map.end() ){
+	  return global_edge_map.at(edge).first;
+      } else {
+	  return global_edge_map.at(std::make_pair(edge.second, edge.first)).first;
+      }
+    }
+    
+    void update_coherence( const Pair & edge, double coherence, double & returned_coherence ){
+      Pair fooedge;
+      
+      if( edge_map.find(edge) != edge_map.end() )
+	fooedge = edge;
+      else
+	fooedge = std::make_pair(edge.second, edge.first);
+
+      const std::pair<double,int> fooloc = edge_map.at(fooedge);
+      const std::pair<double,int> fooglob = global_edge_map.at(fooedge);
+      
+      edge_map[fooedge] = std::make_pair( (fooloc.first * fooloc.second + coherence)/(fooloc.second+1) , fooloc.second+1 );
+      returned_coherence = (fooloc.first * fooloc.second + coherence)/(fooloc.second+1);
+      if( fooglob.second > 0 ){
+	const double foo = .5 + .5*fooglob.first;
+	returned_coherence = foo * returned_coherence + (1-foo) * fooglob.first;
+	if( fooglob.first > .9 ){
+	  returned_coherence = .5 * returned_coherence;
+	}
+      }
+    }
+    
+    void update_coherence( const Pair & edge, double coherence ){
+      if( edge_map.find(edge) != edge_map.end() ){
+	const std::pair<double,int> foo = edge_map.at(edge);
+	edge_map[edge] = std::make_pair( (foo.first * foo.second + coherence)/(foo.second+1) , foo.second+1 );
+      } else {
+	const std::pair<double,int> foo = edge_map.at(std::make_pair(edge.second, edge.first));      
+	edge_map[std::make_pair(edge.second, edge.first)] = std::make_pair( (foo.first * foo.second + coherence)/(foo.second+1) , foo.second+1 );
+      }
+    }
+    
+    void push_coherence(){
+      for(Edge_Consist_Map::iterator iter = edge_map.begin(); iter != edge_map.end(); ++iter) {
+	const Pair edge = iter->first;
+	const std::pair<double,int> foo = global_edge_map.at(edge);
+	global_edge_map[edge] = std::make_pair( (foo.first * foo.second + iter->second.first)/(foo.second+1), foo.second+1 );
+	iter->second = std::make_pair( .5, 0 );
+      }
+    }
+    
+    double mix_proba( const Pair & edge, const double & proba ) const {      
+      if( global_edge_map.find(edge) != global_edge_map.end() ){
+	if( 0 == global_edge_map.at(edge).second )
+	  return proba;
+	else
+	  return .5*proba + .5*global_edge_map.at(edge).first;
+      }
+      else {
+	if( 0 == global_edge_map.at(std::make_pair(edge.second, edge.first)).second )
+	  return proba;
+	else
+	  return .5*proba + .5*global_edge_map.at(std::make_pair(edge.second, edge.first)).first;
+      }
+    }
+    
+    void clear(){
+      for(Edge_Consist_Map::iterator iter = global_edge_map.begin(); iter != global_edge_map.end(); ++iter) {
+	edge_map[iter->first] = std::make_pair(.5,0);
+	global_edge_map[iter->first] = std::make_pair(.5,0);
+      }
+    }
+    
+  private:
+    typedef std::map<Pair, std::pair<double,int>> Edge_Consist_Map;
+    Edge_Consist_Map edge_map;
+    Edge_Consist_Map global_edge_map;
+    
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -263,21 +371,21 @@ class GlobalSfM_Graph_Cleaner
       
       // Add the edge
       for(RelativeInfo_Map::const_iterator iter = map_relat.begin(); iter != map_relat.end(); ++iter) {
-	const Pair p = std::make_pair(iter->first.first, iter->first.second);
+	const Pair p = iter->first;
 	// Initialisation of PairMapEdge
 	adjacency_map[p.first].insert(p.second);
 	adjacency_map[p.second].insert(p.first);
-	edge_consistency_map[p] = std::make_pair(.5,0);
+	edge_consistency_map.initialize(p);
       }  // Initialisation of conherencMap
       
 	  
-      initial_tree_size = 7;
-      initial_tree_ransac_nb = 10000;
+      initial_tree_size = 5;
+      initial_tree_ransac_nb = 1000;
       
       default_max_error = 10000;
       
-      proba_error_positivethres = 5;
-      proba_error_negativethres = 20; 
+      proba_error_positivethres = 2.5;
+      proba_error_negativethres = 7.5; 
       proba_error_pos_thres_over2pi = proba_error_positivethres / 180;
       formular_asuma_coef = .1;
       
@@ -288,6 +396,7 @@ class GlobalSfM_Graph_Cleaner
       stop_descent_number = 1000;
       
       coherence_thres = .5;
+      number_tree = 5;
       
       tree_increment_stop_thres = 0;
       dbtalk = 1;
@@ -296,12 +405,12 @@ class GlobalSfM_Graph_Cleaner
       
       tikzfile.open ("graphe.tex");
       tikzfile << "\\documentclass[tikz]{standalone}\n"
-	       << "\\def\\zdraw[#1][#2][#3]{\\ifnum#2=\\componentchoice\\ifnum#3=1\\draw[tp]\\else\\draw[fp]\\fi\\else\\ifnum#3=1\\draw[fn]\\else\\draw[tn]\\fi\\fi}"
+	       << "\\def\\zdraw[#1][#2][#3]{\\ifnum#2>\\componentchoice\\ifnum#3=1\\draw[tp]\\else\\draw[fp]\\fi\\else\\ifnum#3=1\\draw[fn]\\else\\draw[tn]\\fi\\fi}"
 	       << "\n\\begin{document}\n\\begin{tikzpicture}[\nscale=10,nbase/.style={circle,draw},\nbase/.style={thick},\ntp/.style={green!50!black,line width=.5},"
 	       << "\ntn/.style={red!50!black,line width=.5,opacity=.1},\nfp/.style={line width=1,red},\nfn/.style={line width=.5,green!50!black,dotted},"
 	       << "\ntree/.style={blue,line width=3,opacity=.3,dashed},\nitree/.style={blue!50!red,line width=4,opacity=.3}]\n";      
     }
-    
+    // \\def\\zdraw[#1][#2][#3]{\n\\ifnum#2>\\componentchoice\\def\\tbar{}\\else\\def\\tbar{dashed}\\fi\n\\ifnum#3=1\n\\pgfmathsetmacro{\\tikzfoo}{.3 + 0.7*#2/100}\n\\draw[line width = .5, green!50!black, opacity = \\tikzfoo, \\tbar]\n\\else\\pgfmathsetmacro{\\tikzfoo}{.05 + 0.95*#2/100}\n\\draw[line width=1,red, opacity = \\tikzfoo, \\tbar]\n\\fi}
     
     
     ~GlobalSfM_Graph_Cleaner(){
@@ -320,8 +429,11 @@ class GlobalSfM_Graph_Cleaner
   void set_proba_error_positivethres( double v ){ proba_error_positivethres = v; }
   void set_proba_error_negativethres( double v ){ proba_error_negativethres = v; }
   void set_stop_descent_number( int v ){ stop_descent_number = v; }
+  void set_number_tree( int v ){ number_tree = v; }
   void set_formular_asuma_coef( double v ){ formular_asuma_coef = v; }
   void set_tree_increment_stop_thres( double v ){ tree_increment_stop_thres = v; }
+  
+  void set_dbtalk( int v ){ dbtalk = v; }
   
   ////////// // // /  /    /       /          /       /    /  / // // //////////
   //                                  OTHERS                                  //
@@ -338,9 +450,11 @@ class GlobalSfM_Graph_Cleaner
 	tikzfile << "\\node[nbase] at (" << foo(0) <<  ","<< foo(2) << ")" << " (" << iter->first << ") " << "{" << iter->first << "};\n";
       }
     }
+    
     void set_wrong_edges( const std::set<Pair> & s ){
       wrong_edges = s;
     }
+
     void disp_Graph(const string str) const{
       for(Adjacency_map::const_iterator iter = adjacency_map.begin();
 	  iter != adjacency_map.end(); ++iter) {
@@ -351,11 +465,7 @@ class GlobalSfM_Graph_Cleaner
 	    iterT != indexT_set.end(); ++iterT) {
 	  IndexT t = *iterT;
 	  if (s < t) {
-	    tikzfile << "\\zdraw["<< str << "]";
-	    if ( edge_consistency_map.find(std::make_pair(s,t)) != edge_consistency_map.end() )
-	      tikzfile << "[" << round(edge_consistency_map.at(std::make_pair(s,t))) << "]"; // TODO : round
-	    else
-	      tikzfile << "[" << round(edge_consistency_map.at(std::make_pair(t,s))) << "]"; // TODO : round
+	    tikzfile << "\\zdraw["<< str << "][" << round( 100 * edge_consistency_map.get_coherence(std::make_pair(s,t)) ) << "]";
 	    if (wrong_edges.find(std::make_pair(s,t)) != wrong_edges.end() || wrong_edges.find(std::make_pair(t,s)) != wrong_edges.end() )
 	      tikzfile << "[0]";
 	    else
@@ -365,11 +475,22 @@ class GlobalSfM_Graph_Cleaner
 	} // for (iterT) in [indexT_set]
       } // for (iter) in [adjacency_map]
     }
+
+    int count_negatives(){  
+      int count = 0;
+      for(RelativeInfo_Map::const_iterator iter = relatives_Rt.begin(); iter != relatives_Rt.end(); ++iter){
+	if( wrong_edges.find(iter->first) != wrong_edges.end() ){count++;}
+      }
+      return count;
+    }
     
     double formule_asuma( double nbpos, double nbneg ) const {
       const double error = pow( 1+formular_asuma_coef/(1-proba_error_pos_thres_over2pi),nbneg)
                          / pow( 1+formular_asuma_coef/  proba_error_pos_thres_over2pi  ,nbpos);
-      return 1/(1+ formule_normalization_coef * error);
+      if( 0 == nbneg && nbpos >= 2 )
+	return 1 /( 1 + .2 * formule_normalization_coef * error );
+      else
+	return 1 /( 1 + formule_normalization_coef * error );
     }
     
     /* DEBUG DEBUG DEBUG */    
@@ -384,7 +505,7 @@ class GlobalSfM_Graph_Cleaner
 
     RelativeInfo_Map relatives_Rt;
     Adjacency_map adjacency_map;
-    std::map<Pair, std::pair<double,int>> edge_consistency_map;
+    Consistency_Map edge_consistency_map;
     
     /* DEBUG DEBUG DEBUG */
     mutable int dbtalk;
@@ -411,6 +532,7 @@ class GlobalSfM_Graph_Cleaner
   double formular_asuma_coef;
   
   double coherence_thres;
+  int number_tree;
   
   
   double proba_error_pos_thres_over2pi;
@@ -445,35 +567,42 @@ class GlobalSfM_Graph_Cleaner
 	      Transformation T,
 	      const Tree & tree,
 	      const std::map< IndexT, int > & distance,
-	      int & nb_total, bool & edge_skip, double & nbpos_s, double & nb_s) const;
+	      int & nb_total, bool & edge_skip, double & nbpos_s, double & nb_s);
 	      
-  void increase_Tree( Tree & tree ) const;
+  void increase_Tree( Tree & tree );
 
   //
   
-  double get_coherence( const Pair & edge ) const {
-    if( edge_consistency_map.find(edge) != edge_consistency_map.end() ){
-	return edge_consistency_map.at(edge).first;
-    } else {
-	return edge_consistency_map.at(std::make_pair(edge.second, edge.first)).first;
-    }
-  }
-  
-  void update_coherence( const Pair & edge, double coherence ){
-    if( edge_consistency_map.find(edge) != edge_consistency_map.end() ){
-	edge_consistency_map[edge] = std::make_pair(coherence,1);
-    } else {
-	edge_consistency_map[std::make_pair(edge.second, edge.first)] = std::make_pair(coherence,1);
-    }
-  }  
-  void update_coherence( const Tree & tree ){        
-    for(RelativeInfo_Map::const_iterator iter = relatives_Rt.begin();
-	iter != relatives_Rt.end(); ++iter) {
+  void tree_update_coherence( const Tree & tree ){
+    for(RelativeInfo_Map::const_iterator iter = relatives_Rt.begin(); iter != relatives_Rt.end(); ++iter) {
       if ( tree.contains( iter->first.first ) && tree.contains(iter->first.second) ) {
 	double foo = tree.transformation_error( Transformation( iter->second, iter->first ) );
 	foo = cycle_probability( foo );
-	update_coherence( iter->fist, foo );
+	if(dbtalk>1){std::cout << iter->first.first << "-" << iter->first.second << " : " << foo << "(";}
+	edge_consistency_map.update_coherence( iter->first, foo, foo );
+	if(dbtalk>1){std::cout << foo << ")" << std::endl;}
       }
+    }
+  }
+  
+  void clean_graph( const double & threshold ){
+    IndexT source, target;
+    if(dbtalk){ std::cout << "Edges removed:"; }
+    
+    std::set<Pair> removedPair;
+     
+    for(RelativeInfo_Map::const_iterator iter = relatives_Rt.begin(); iter != relatives_Rt.end(); ++iter) {
+      source = iter->first.first;     target = iter->first.second;
+      if ( edge_consistency_map.get_coherence(iter->first) < threshold ){
+	if(dbtalk){ std::cout << " (" << iter->first.first << "," << iter->first.second << ")[" << edge_consistency_map.get_coherence(iter->first) << "]"; }
+	removedPair.insert(iter->first);
+      }
+    }
+    for(std::set<Pair>::const_iterator iter = removedPair.begin(); iter != removedPair.end(); ++iter) {
+      relatives_Rt.erase(*iter);
+      adjacency_map[iter->first].erase(iter->second);
+      adjacency_map[iter->second].erase(iter->first);
+      edge_consistency_map.erase(*iter);
     }
   }
   

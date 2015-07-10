@@ -35,12 +35,16 @@ int main(int argc, char **argv)
   int ring_size = 0;
   int min_ring_size = ring_size;
   int nb_cluster = 1;
+  int dbtalk = 1;
   double ring_ratio = 1;
   
+  int number_tree = 10;
   
   double formular_asuma_coef = .1;
   double proba_error_pos_thres_over2pi = 0.0277;
-   
+  
+  int r_seed = 0;
+  
   CmdLine cmd;
   
   cmd.add( make_option('N', n_views, "nombreDeVues") );
@@ -56,7 +60,11 @@ int main(int argc, char **argv)
   
   cmd.add( make_option('Z', formular_asuma_coef, "asuma") );
   cmd.add( make_option('Y', proba_error_pos_thres_over2pi, "podp") );
-    
+  cmd.add( make_option('T', number_tree, "numbreTree") );
+  
+  cmd.add( make_option('w', r_seed, "randomSeed") );
+  cmd.add( make_option('W', dbtalk, "dbtalk") );
+  
   cmd.process(argc, argv);
   
   min_angular_error = D2R(min_angular_error);
@@ -86,6 +94,8 @@ int main(int argc, char **argv)
   int total_edge = n_views * (n_views - 1) / 2;
   int n_total_edge = int( total_edge_p * total_edge );
   int n_wrong_edges = int( wrong_edges_p * n_total_edge );  // 10%
+  
+  if( r_seed > 0 ){ srand( r_seed ); }
   
   std::default_random_engine generator;
   std::uniform_real_distribution<double> unif_distrib(0.0,1.0);
@@ -200,9 +210,11 @@ int main(int argc, char **argv)
   
   
   sfm::GlobalSfM_Graph_Cleaner graph_cleaner(map_relative);
+  graph_cleaner.set_number_tree( number_tree );
+  graph_cleaner.set_dbtalk( dbtalk );
       
     cout.precision(3);
-    std::cout << "\n\n\nTABLEAUX (=> Rapport)";
+    std::cout << "\n\n\nTABLEAUX (=> Rapport)\n";
     for( int nbneg = 0; nbneg<=20; nbneg++ ){
       std::cout << nbneg << "&";
       for( int nbpos = 0; nbpos<=10; nbpos++ ){
