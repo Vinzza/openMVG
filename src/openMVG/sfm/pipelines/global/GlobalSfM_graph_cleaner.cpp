@@ -84,6 +84,11 @@ RelativeInfo_Map GlobalSfM_Graph_Cleaner::run()
     tree_update_coherence( tree );
     edge_consistency_map.push_coherence();
   }
+  
+  Tree tree = final_tree();
+  std::set<Pair> foo = tree.get_pair_set();
+  for (std::set<Pair>::const_iterator iter = foo.begin(); iter != foo.end(); ++iter)
+  tikzfile << "\\draw[ftree](" << iter->first << ")--(" << iter->second << ");"<<std::endl;
     
     /////////////////
   
@@ -171,14 +176,15 @@ Tree GlobalSfM_Graph_Cleaner::generate_Random_Tree( const int size ) const{
   
 ////////////////////////////////////////////////////////////////////////////////
 
-double GlobalSfM_Graph_Cleaner::tree_Consistency_Error( Tree & tree, int & nbpos, int & nbneg, int & min_count ) const {
+double GlobalSfM_Graph_Cleaner::tree_Consistency_Error( Tree & tree, double & nbpos, double & nb, int & min_count, int & nbtree ) const {
     // Local 'Global' transformation to speedup the computation
-    double consistency_error = 0.; nbpos = 0; nbneg = 0;
+    double consistency_error = 0.; nbpos = 0; 
+    nb = 0;
     Transformation T_i;//    Vec3 t_i;    Mat3 R_i;
     
     tree.initialise_transformation( relatives_Rt );
         
-    std::set<IndexT> tree_node = tree.get_indexT_set();
+    const std::set<IndexT> tree_node = tree.get_indexT_set();
     min_count = tree_node.size();
     
     for(std::set<IndexT>::const_iterator iter = tree_node.begin(); iter != tree_node.end(); ++iter) {
@@ -192,23 +198,32 @@ double GlobalSfM_Graph_Cleaner::tree_Consistency_Error( Tree & tree, int & nbpos
 	    Pair foo = std::make_pair(*iter,*iter_t);
 	    const double error = tree.transformation_error( Transformation(relatives_Rt.at(foo), foo) );
 
-	    consistency_error += min( error, proba_error_negativethres );
-	    if (error < proba_error_positivethres)
-	      nbpos += 1;
-	    else
-	      nbneg += 1;
+//	    consistency_error += min( error, proba_error_negativethres );
+	    nb += 1;
+	    nbpos += cycle_probability(error);
 	  }
 	} // if (tree) contains (iter_t)
       } // for (iter_t) in (adj_set)
       min_count = min( min_count, count );
     } // for (iter) in (tree_node)
-   
-    if( (nbpos == 0 && nbneg == 0) || min_count <= 1 ){ return default_max_error; }
     
-    consistency_error = ( 1 + (consistency_error/proba_error_negativethres) )
-	    * ( max(nbneg-nbpos,0) + 1 )/( (nbpos + 1)*(nbpos + .01) )
-	    * ( 2 / double(min_count) );
-    return consistency_error;
+    const std::set<Pair> tree_pair = tree.get_pair_set();
+    nbtree = 0;
+    for(std::set<Pair>::const_iterator iter = tree_pair.begin(); iter != tree_pair.end(); ++iter) {
+      nbtree += edge_consistency_map.get_nbtree(*iter);    // PARAM : nbtree_max
+    }
+    
+   
+    if( (nbpos == 0 && nb == 0) || min_count <= 1 ){ return 0; }
+    
+    consistency_error = pow( 1+formular_asuma_coef/(1-proba_error_pos_thres_over2pi),nb - nbpos)
+                       / pow( 1+formular_asuma_coef/  proba_error_pos_thres_over2pi  ,nbpos);
+    consistency_error *=  double(1+nbtree) / ( double(min_count) );
+
+/*    consistency_error = ( 1 + (consistency_error/proba_error_negativethres) )
+	    * ( max(nb-nbpos,0.) + 1. )/( (nbpos + 1.)*(nbpos + .01) )
+	    * ( 2 / double(min_count) ); */
+    return 1 / ( 1 + consistency_error );
   } // function tree_Consistency_Error
   
 ////////////////////////////////////////////////////////////////////////////////
@@ -216,18 +231,18 @@ double GlobalSfM_Graph_Cleaner::tree_Consistency_Error( Tree & tree, int & nbpos
   Tree GlobalSfM_Graph_Cleaner::generate_Consistent_Tree( const int size, double & best_tree_error ) const {
     Tree best_tree;
     double tree_err;
-    best_tree_error = default_max_error;
+    best_tree_error = 0;
     
-    int nbpos, nbneg, min_count;    
+    double nbpos, nb; int min_count, nbtree;    
     for( int foo = 1; foo < initial_tree_ransac_nb; foo++ ){
       
       Tree tree_i = generate_Random_Tree(size);
-      tree_err = tree_Consistency_Error( tree_i, nbpos, nbneg, min_count );  
+      tree_err = tree_Consistency_Error( tree_i, nbpos, nb, min_count, nbtree );  
 
-      if( tree_err < best_tree_error ){
+      if( tree_err > best_tree_error ){
 	best_tree = tree_i;
 	best_tree_error = tree_err;
-	if(dbtalk>0){std::cout << foo << " - error: " << tree_err << "(" << nbpos << "/" << nbneg << " : " << min_count << ") : ";
+	if(dbtalk>0){std::cout << foo << " - error: " << tree_err << "(" << nbpos << "/" << nb-nbpos << " : c" << min_count << " : t" << nbtree << ") : ";
 	  tree_i.print();
 	  std::cout << std::endl;
 	}
@@ -245,11 +260,11 @@ double GlobalSfM_Graph_Cleaner::tree_Consistency_Error( Tree & tree, int & nbpos
 		const std::set<IndexT> & tree_node_set) const {
     std::map< IndexT, int > distance;
     std::list<IndexT> markedIndexT;
-    
+    /*
     for(std::set<IndexT>::const_iterator iter = tree_node_set.begin(); iter != tree_node_set.end(); ++iter) {
       distance[*iter] = 0;
       markedIndexT.push_back(*iter);
-    } /*
+    } */
     distance[pair.first] = 0;
     markedIndexT.push_back(pair.first);
     /**/
@@ -371,6 +386,7 @@ void GlobalSfM_Graph_Cleaner::increase_Tree( Tree & tree ) {
 	
 	dbtalk--;
 	proba = edge_consistency_probability( source_node, new_node, Transformation(), tree, distance, nb_total, edge_skip, nbpos, nb );
+	proba = 1 / ( 1 + (1+4*edge_consistency_map.get_nbtree(pair)) * (1-proba) / proba );
 	dbtalk++;
 	
 	edge_consistency_map.update_coherence( pair, proba, proba );
@@ -391,7 +407,7 @@ void GlobalSfM_Graph_Cleaner::increase_Tree( Tree & tree ) {
 
       } // for
       
-      if (max_proba < tree_increment_stop_thres){ break; }
+      if (max_proba <= tree_increment_stop_thres){ break; }
 	
 	tree.insert(best_pair, Transformation( relatives_Rt, best_pair.first, best_pair.second ) );
 	
@@ -414,6 +430,68 @@ void GlobalSfM_Graph_Cleaner::increase_Tree( Tree & tree ) {
 
 
   
+////////////////////////////////////////////////////////////////////////////////
+
+Tree GlobalSfM_Graph_Cleaner::final_tree(){
+  double proba, best_proba;
+  Pair best_pair;
+  IndexT new_node, source_node;
+  
+  // Initialise edge_indic
+  std::set<Pair> edge_indic;
+  const IndexT first_node = adjacency_map.begin()->first;
+  const std::set<IndexT> & first_adj_set = adjacency_map.at(first_node);
+  for(std::set<IndexT>::const_iterator iter = first_adj_set.begin(); iter != first_adj_set.end(); ++iter) {
+      edge_indic.insert(std::make_pair(first_node,*iter));
+  }
+  
+  Tree tree = Tree(first_node);
+  
+    while( edge_indic.size() > 0 ) {
+      best_proba = 0;
+
+      for(std::set<Pair>::iterator iter = edge_indic.begin(); iter != edge_indic.end(); ++iter) {
+	const Pair pair = *iter;
+
+	// Edge selection
+	if(tree.contains(pair.first) && not tree.contains(pair.second))
+	  {new_node = pair.second;	source_node = pair.first;}
+	else if (tree.contains(pair.second) && not tree.contains(pair.first))
+	  {new_node = pair.first;	source_node = pair.second;}
+	else { edge_indic.erase(pair); continue;}
+	
+	proba = edge_consistency_map.get_coherence(pair);
+	
+	if ( proba > best_proba ){ // We keep the extremum
+	  best_proba = proba;
+	  best_pair = std::make_pair( source_node, new_node );
+	} // if
+
+      } // for
+      
+
+      if (best_proba <= tree_increment_stop_thres){ break; }
+
+      if(dbtalk>0){std::cout << " " << best_pair.first << "-" << best_pair.second << "[" << best_proba << "] : "; }
+      
+      tree.insert(best_pair, Transformation( relatives_Rt, best_pair.first, best_pair.second ) );
+      
+      // We compute the distance to the tree, to ignore the non biconnexe vertexes
+      std::map<IndexT,int> distance = compute_distance( best_pair, tree.get_indexT_set() );
+      const std::set<IndexT> adj_newnode = adjacency_map.at(best_pair.second);
+            
+      for(std::set<IndexT>::const_iterator iter = adj_newnode.begin(); iter != adj_newnode.end(); ++iter) {
+	if( distance.find(*iter) != distance.end() && distance.at(*iter) != 0 ){ // We dont want to consider the evaluated pair
+	  edge_indic.insert(std::make_pair(best_pair.second, *iter));
+	}
+      }
+    } // while
+    
+    return tree;
+  
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////
 //                                                                            //
 ////////////////////////////////////////////////////////////////////////////////

@@ -230,6 +230,7 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Process() {
   const SfM_Data data = Get_SfM_Data();
   const Poses poses = data.GetPoses();
   std::set<IndexT> foo;
+  std::cout << "\\def\\znode#1#2#3#4#5{\\node[#1] (#2) at (#3,#5) {#2};}\n";
   for(RelativeInfo_Map::const_iterator iter = _relatives_Rt.begin(); iter != _relatives_Rt.end(); ++iter){
       foo.insert(iter->first.first);
       foo.insert(iter->first.second);
@@ -237,7 +238,7 @@ bool GlobalSfMReconstructionEngine_RelativeMotions::Process() {
   for(std::set<IndexT>::const_iterator iter = foo.begin(); iter != foo.end(); ++iter){
     if( poses.find(*iter) != poses.end() ){
       const Vec3 center = poses.at(*iter).center();
-      std::cout <<  "\\node[nbase] (" << *iter << ") at (" << center(0) <<  ","<< center(2) << ") {" << *iter << "};";
+      std::cout <<  "\\znode{nbase}{" << *iter << "}{" << center(0) << "}{"<< center(1) << "}{" << center(2) << "};";
     } else {
       std::cout << "\\coordinate  (" << *iter << ") at (\\dumx,\\dumy);";
     }

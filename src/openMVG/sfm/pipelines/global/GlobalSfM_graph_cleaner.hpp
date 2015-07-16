@@ -258,17 +258,20 @@ struct Consistency_Map {
       for(RelativeInfo_Map::const_iterator iter = map_relat.begin(); iter != map_relat.end(); ++iter) {
 	edge_map[iter->first] = std::make_pair(.5,0);
 	global_edge_map[iter->first] = std::make_pair(.5,0);
+	nbtree[iter->first] = 0;
       }
     }
     
     void erase( const Pair & p ){
 	edge_map.erase(p);
 	global_edge_map.erase(p);
+	nbtree.erase(p);
     }
     
     void initialize( const Pair & p ){
 	edge_map[p] = std::make_pair(.5,0);
 	global_edge_map[p] = std::make_pair(.5,0);
+	nbtree[p] = 0;
     }
     
     double get_coherence( const Pair & edge ) const {
@@ -276,6 +279,14 @@ struct Consistency_Map {
 	  return global_edge_map.at(edge).first;
       } else {
 	  return global_edge_map.at(std::make_pair(edge.second, edge.first)).first;
+      }
+    }
+    
+    int get_nbtree( const Pair & edge ) const {
+      if( nbtree.find(edge) != nbtree.end() ){
+	  return min(nbtree.at(edge),5);
+      } else {
+	  return min(nbtree.at(std::make_pair(edge.second, edge.first)),5);
       }
     }
     
@@ -311,6 +322,16 @@ struct Consistency_Map {
       }
     }
     
+    void update_tree( const Tree & tree ){
+      const std::set<Pair> pair_set = tree.get_pair_set();
+      for(std::set<Pair>::const_iterator iter = pair_set.begin(); iter != pair_set.end(); ++iter) {
+	if( pair_set.find(*iter) != pair_set.end() )
+	  nbtree[*iter] += 1;
+	else
+	  nbtree[std::make_pair(iter->second, iter->first)] += 1;
+      }
+    }
+    
     void push_coherence(){
       for(Edge_Consist_Map::iterator iter = edge_map.begin(); iter != edge_map.end(); ++iter) {
 	const Pair edge = iter->first;
@@ -335,10 +356,16 @@ struct Consistency_Map {
       }
     }
     
+    void clear_local(){
+      for(Edge_Consist_Map::iterator iter = global_edge_map.begin(); iter != global_edge_map.end(); ++iter)
+	edge_map[iter->first] = std::make_pair(.5,0);
+    }
+    
     void clear(){
       for(Edge_Consist_Map::iterator iter = global_edge_map.begin(); iter != global_edge_map.end(); ++iter) {
 	edge_map[iter->first] = std::make_pair(.5,0);
 	global_edge_map[iter->first] = std::make_pair(.5,0);
+	nbtree[iter->first] = 0;
       }
     }
     
@@ -346,6 +373,7 @@ struct Consistency_Map {
     typedef std::map<Pair, std::pair<double,int>> Edge_Consist_Map;
     Edge_Consist_Map edge_map;
     Edge_Consist_Map global_edge_map;
+    std::map<Pair, int> nbtree;
     
 };
 
@@ -408,6 +436,7 @@ class GlobalSfM_Graph_Cleaner
 	       << "\\def\\zdraw[#1][#2][#3]{\\ifnum#2>\\componentchoice\\ifnum#3=1\\draw[tp]\\else\\draw[fp]\\fi\\else\\ifnum#3=1\\draw[fn]\\else\\draw[tn]\\fi\\fi}"
 	       << "\n\\begin{document}\n\\begin{tikzpicture}[\nscale=10,nbase/.style={circle,draw},\nbase/.style={thick},\ntp/.style={green!50!black,line width=.5},"
 	       << "\ntn/.style={red!50!black,line width=.5,opacity=.1},\nfp/.style={line width=1,red},\nfn/.style={line width=.5,green!50!black,dotted},"
+	       << "\nftree/.style={green!20!yellow,line width=10, opacity=.3},"
 	       << "\ntree/.style={blue,line width=3,opacity=.3,dashed},\nitree/.style={blue!50!red,line width=4,opacity=.3}]\n";      
     }
     // \\def\\zdraw[#1][#2][#3]{\n\\ifnum#2>\\componentchoice\\def\\tbar{}\\else\\def\\tbar{dashed}\\fi\n\\ifnum#3=1\n\\pgfmathsetmacro{\\tikzfoo}{.3 + 0.7*#2/100}\n\\draw[line width = .5, green!50!black, opacity = \\tikzfoo, \\tbar]\n\\else\\pgfmathsetmacro{\\tikzfoo}{.05 + 0.95*#2/100}\n\\draw[line width=1,red, opacity = \\tikzfoo, \\tbar]\n\\fi}
@@ -553,7 +582,7 @@ class GlobalSfM_Graph_Cleaner
   //
   
   Tree generate_Random_Tree( const int size ) const;
-  double tree_Consistency_Error( Tree & tree, int & nbpos, int & nbneg, int & min_count ) const;
+  double tree_Consistency_Error( Tree & tree, double & nbpos, double & nb, int & min_count, int & nbtree ) const;
   Tree generate_Consistent_Tree( const int size, double & tree_error ) const;
 
   //
@@ -571,9 +600,11 @@ class GlobalSfM_Graph_Cleaner
 	      
   void increase_Tree( Tree & tree );
 
+  Tree final_tree();
   //
   
   void tree_update_coherence( const Tree & tree ){
+    edge_consistency_map.update_tree( tree );
     for(RelativeInfo_Map::const_iterator iter = relatives_Rt.begin(); iter != relatives_Rt.end(); ++iter) {
       if ( tree.contains( iter->first.first ) && tree.contains(iter->first.second) ) {
 	double foo = tree.transformation_error( Transformation( iter->second, iter->first ) );
