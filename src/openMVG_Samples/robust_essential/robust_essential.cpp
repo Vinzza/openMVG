@@ -22,6 +22,8 @@
 #include <string>
 #include <iostream>
 
+#include "third_party/cmdLine/cmdLine.h"
+
 using namespace openMVG;
 using namespace openMVG::matching;
 using namespace openMVG::image;
@@ -41,12 +43,18 @@ bool exportToPly(const std::vector<Vec3> & vec_points,
   const std::vector<Vec3> & vec_camPos,
   const std::string & sFileName);
 
-int main() {
+int main(int argc, char **argv) {
 
   const std::string sInputDir = stlplus::folder_up(string(THIS_SOURCE_DIR))
     + "/imageData/SceauxCastle/";
-  const string jpg_filenameL = sInputDir + "100_7101.jpg";
-  const string jpg_filenameR = sInputDir + "100_7102.jpg";
+  string jpg_filenameL = sInputDir + "100_7101.jpg";
+  string jpg_filenameR = sInputDir + "100_7102.jpg";
+      
+  CmdLine cmd;
+  cmd.add( make_option('l', jpg_filenameL, "filenameL") );
+  cmd.add( make_option('r', jpg_filenameR, "filenameR") );
+  cmd.process(argc, argv);
+  
 
   Image<unsigned char> imageL, imageR;
   ReadImage(jpg_filenameL.c_str(), &imageL);

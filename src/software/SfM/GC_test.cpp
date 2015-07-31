@@ -24,6 +24,26 @@ int main(int argc, char **argv)
 {
   using namespace std;
   
+  
+  std::set<Pair> testedPair;
+  testedPair.insert(std::make_pair(37,38));
+  testedPair.insert(std::make_pair(36,38));
+  testedPair.insert(std::make_pair(39,38));
+  testedPair.insert(std::make_pair(0,38));
+  testedPair.insert(std::make_pair(37,39));
+  
+  testedPair.insert(std::make_pair(12,10));
+  testedPair.insert(std::make_pair(12,11));
+  testedPair.insert(std::make_pair(12,13));
+  testedPair.insert(std::make_pair(12,14));
+  testedPair.insert(std::make_pair(11,13));
+  
+  testedPair.insert(std::make_pair(25,23));
+  testedPair.insert(std::make_pair(25,24));
+  testedPair.insert(std::make_pair(25,26));
+  testedPair.insert(std::make_pair(25,27));
+  testedPair.insert(std::make_pair(26,24));
+  
   openMVG::system::Timer timer;
     
   int n_views = 20;
@@ -44,6 +64,9 @@ int main(int argc, char **argv)
   double proba_error_pos_thres_over2pi = 0.0277;
   
   int r_seed = 0;
+  
+  double resultpos = 0, resultneg = 0, temps = 0, resultposc = 0;
+  int nb_iteration = 50;
   
   CmdLine cmd;
   
@@ -86,29 +109,31 @@ int main(int argc, char **argv)
     << "-----------------------------------------------------------\n"
     << std::endl
     << "-----------------------------------------------------------"<<std::endl;
-        
+      
   //---------------------------------------
   // Global SfM reconstruction process
   //---------------------------------------
-  
-  int total_edge = n_views * (n_views - 1) / 2;
-  int n_total_edge = int( total_edge_p * total_edge );
-  int n_wrong_edges = int( wrong_edges_p * n_total_edge );  // 10%
-  
   if( r_seed > 0 ){ srand( r_seed ); }
   
   std::default_random_engine generator;
   std::uniform_real_distribution<double> unif_distrib(0.0,1.0);
+  
+  for( int k = 0; k < nb_iteration; k++ ){
     
+  int total_edge = n_views * (n_views - 1) / 2;
+  int n_total_edge = int( total_edge_p * total_edge );
+  int n_wrong_edges = int( wrong_edges_p * n_total_edge );  // 10%
+        
   RelativeInfo_Map map_relative;
   vector<Mat3> R_global;  R_global.reserve(n_views);
   vector<Vec3> C_global;  C_global.reserve(n_views);
   std::set<Pair> wrong_edges;
+  if(dbtalk>=0){
   // -------------------- Test graph computation -------------------- //
   std::cout << "Graph Construction\nNumber Views: " << n_views
 	    << "\nWrong correspondences: "<< n_wrong_edges << std::endl;
   std::cout << "-----------------------------------------------------------" << std::endl;  
-  
+  }  
   // Create global transformation
   for( int i = 0; i < n_views; i++ ){    
     
@@ -208,11 +233,15 @@ int main(int argc, char **argv)
   /**/ // DEBUG
 
   
-  
   sfm::GlobalSfM_Graph_Cleaner graph_cleaner(map_relative);
   graph_cleaner.set_number_tree( number_tree );
-  graph_cleaner.set_dbtalk( dbtalk );
+  graph_cleaner.set_dbtalk( dbtalk );  
+  graph_cleaner.set_position_groundtruth(C_global);
+  graph_cleaner.set_wrong_edges(wrong_edges);
+  graph_cleaner.set_dbtalk(dbtalk);
+  graph_cleaner.set_formular_asuma_coef( formular_asuma_coef );
       
+  /*
     cout.precision(3);
     std::cout << "\n\n\nTABLEAUX (=> Rapport)\n";
     for( int nbneg = 0; nbneg<=20; nbneg++ ){
@@ -235,12 +264,45 @@ int main(int argc, char **argv)
     std::cout << "\n\n ERR = " << 1+formular_asuma_coef/(1-proba_error_pos_thres_over2pi) << "^{nbneg} / " << 1+formular_asuma_coef/proba_error_pos_thres_over2pi << "^{nbpos}\n\n";
     cout.precision(6);
   // err = ( 2 / double(min_count) ) * size * ( 1 + (tree_err/error_cst) ) * ( max(nbneg-nbpos,0) + 1 )/( (nbpos + 1)*(nbpos + .01) );
-    
-  graph_cleaner.set_position_groundtruth(C_global);
-  graph_cleaner.set_wrong_edges(wrong_edges);
-  std::cout << "-----------------------------------------------------------\n---- Cleaning Graph" << std::endl;
-  std::cout << "----------------------------------------------------------" << std::endl;
+  /* */
+  if(dbtalk>=0){
+    std::cout << "-----------------------------------------------------------\n---- Cleaning Graph" << std::endl;
+    std::cout << "----------------------------------------------------------" << std::endl;
+  }
+  
+  openMVG::system::Timer footimer;
   RelativeInfo_Map old_relatives_Rt = graph_cleaner.run();
+  
+  double zzfoo = footimer.elapsed();
+  temps += zzfoo;
+  resultneg += graph_cleaner.get_resultneg();
+  resultpos += graph_cleaner.get_resultpos();
+  
+  double critic_edge = 0;
+  for (std::set<Pair>::iterator iter = testedPair.begin(); iter != testedPair.end(); ++iter) {
+    if( old_relatives_Rt.find( *iter ) != old_relatives_Rt.end() )
+      critic_edge += 1;
+    else if( old_relatives_Rt.find( std::make_pair(iter->second, iter->first) ) != old_relatives_Rt.end() )
+      critic_edge += 1;
+  }
+  resultposc += critic_edge / double(testedPair.size());
+  
+  
+  std::cout << k << " : temps = " << zzfoo
+	    << " : positif = " << round(1000 * graph_cleaner.get_resultpos()) / 10
+	    << " : positifC = " << round(1000 * critic_edge / double(testedPair.size())) / 10
+	    << " : negatif = " << round(1000 * graph_cleaner.get_resultneg()) / 10 
+	    << std::endl;
+	    
+	    
+	    
+  }
+  
+  std::cout << " RESULTAT MOYEN : temps = " << temps / nb_iteration
+	    << " : positif = " << round(1000 * resultpos / nb_iteration) / 10
+	    << " : positifC = " << round(1000 * resultposc / nb_iteration) / 10
+	    << " : negatif = " << round(1000 * resultneg / nb_iteration) / 10 
+	    << std::endl;
   
   std::cout << " Total time took (s): " << timer.elapsed() << std::endl;
 

@@ -20,19 +20,26 @@
 #include <string>
 #include <iostream>
 
+#include "third_party/cmdLine/cmdLine.h"
+
 using namespace openMVG;
 using namespace openMVG::image;
 using namespace openMVG::matching;
 using namespace svg;
 using namespace std;
 
-int main() {
+int main(int argc, char **argv) {
 
   Image<RGBColor> image;
   string jpg_filenameL = stlplus::folder_up(string(THIS_SOURCE_DIR))
     + "/imageData/StanfordMobileVisualSearch/Ace_0.png";
   string jpg_filenameR = stlplus::folder_up(string(THIS_SOURCE_DIR))
     + "/imageData/StanfordMobileVisualSearch/Ace_1.png";
+    
+  CmdLine cmd;
+  cmd.add( make_option('l', jpg_filenameL, "filenameL") );
+  cmd.add( make_option('r', jpg_filenameR, "filenameR") );
+  cmd.process(argc, argv);
 
   Image<unsigned char> imageL, imageR;
   ReadImage(jpg_filenameL.c_str(), &imageL);

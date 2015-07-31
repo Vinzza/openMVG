@@ -341,7 +341,7 @@ struct Consistency_Map {
       }
     }
     
-    double mix_proba( const Pair & edge, const double & proba ) const {      
+    double mix_proba( const Pair & edge, const double & proba ) const {
       if( global_edge_map.find(edge) != global_edge_map.end() ){
 	if( 0 == global_edge_map.at(edge).second )
 	  return proba;
@@ -393,7 +393,6 @@ class GlobalSfM_Graph_Cleaner
     GlobalSfM_Graph_Cleaner(const RelativeInfo_Map & map_relat) : relatives_Rt(map_relat) {
       // Build SetNodes
       std::set<IndexT> setNodes;
-      std::cout << "Graph Initialisation:" << std::endl;
       for(RelativeInfo_Map::const_iterator iter = map_relat.begin(); iter != map_relat.end(); ++iter) {
 	setNodes.insert(iter->first.first);	setNodes.insert(iter->first.second);      }
       
@@ -415,7 +414,7 @@ class GlobalSfM_Graph_Cleaner
       proba_error_positivethres = 2.5;
       proba_error_negativethres = 7.5; 
       proba_error_pos_thres_over2pi = proba_error_positivethres / 180;
-      formular_asuma_coef = .1;
+      formular_asuma_coef = .2;
       
       formule_normalization_coef = log(1+formular_asuma_coef/proba_error_pos_thres_over2pi)
 				  /log(1+formular_asuma_coef/(1-proba_error_pos_thres_over2pi));
@@ -424,13 +423,11 @@ class GlobalSfM_Graph_Cleaner
       stop_descent_number = 1000;
       
       coherence_thres = .5;
-      number_tree = 5;
+      number_tree = 1;
       
       tree_increment_stop_thres = 0;
       dbtalk = 1;
-
-      std::cout << "Proba_neutral = " << proba_neutral << std::endl;
-      
+ 
       tikzfile.open ("graphe.tex");
       tikzfile << "\\documentclass[tikz]{standalone}\n"
 	       << "\\def\\zdraw[#1][#2][#3]{\\ifnum#2>\\componentchoice\\ifnum#3=1\\draw[tp]\\else\\draw[fp]\\fi\\else\\ifnum#3=1\\draw[fn]\\else\\draw[tn]\\fi\\fi}"
@@ -459,7 +456,12 @@ class GlobalSfM_Graph_Cleaner
   void set_proba_error_negativethres( double v ){ proba_error_negativethres = v; }
   void set_stop_descent_number( int v ){ stop_descent_number = v; }
   void set_number_tree( int v ){ number_tree = v; }
-  void set_formular_asuma_coef( double v ){ formular_asuma_coef = v; }
+  void set_formular_asuma_coef( double v ){
+    formular_asuma_coef = v;
+    formule_normalization_coef = log(1+formular_asuma_coef/proba_error_pos_thres_over2pi)
+				  /log(1+formular_asuma_coef/(1-proba_error_pos_thres_over2pi));
+      proba_neutral = 1/(1+formule_normalization_coef);
+  }
   void set_tree_increment_stop_thres( double v ){ tree_increment_stop_thres = v; }
   
   void set_dbtalk( int v ){ dbtalk = v; }
@@ -514,33 +516,43 @@ class GlobalSfM_Graph_Cleaner
     }
     
     double formule_asuma( double nbpos, double nbneg ) const {
+      /* / PIZZA
+      const double error = formular_asuma_coef * nbneg*(nbneg+1) / ((nbpos+.01)*(nbpos+1));
+      return 1 /( 1 + error );
+      /**/
+      
       const double error = pow( 1+formular_asuma_coef/(1-proba_error_pos_thres_over2pi),nbneg)
                          / pow( 1+formular_asuma_coef/  proba_error_pos_thres_over2pi  ,nbpos);
       if( 0 == nbneg && nbpos >= 2 )
 	return 1 /( 1 + .2 * formule_normalization_coef * error );
       else
 	return 1 /( 1 + formule_normalization_coef * error );
+    /**/
     }
     
-    /* DEBUG DEBUG DEBUG */    
+    double get_resultneg(){ return resultneg; }
+    double get_resultpos(){ return resultpos; }
     
+    /* DEBUG DEBUG DEBUG */
+
   private:
-    
+
   ////////// // // /  /    /       /          /       /    /  / // // //////////
   //                                 VARIABLE                                 //
   ////////// // // /  /    /       /          /       /    /  / // // //////////
-    
+
     typedef std::map<IndexT, std::set<IndexT>> Adjacency_map;
 
     RelativeInfo_Map relatives_Rt;
     Adjacency_map adjacency_map;
     Consistency_Map edge_consistency_map;
-    
+
     /* DEBUG DEBUG DEBUG */
     mutable int dbtalk;
     std::vector<Vec3> position_GroundTruth;
     std::set<Pair> wrong_edges;
     mutable ofstream tikzfile;
+    double resultpos, resultneg;
     /* DEBUG DEBUG DEBUG */    
         
   ////////// // // /  /    /       /          /       /    /  / // // //////////
@@ -618,16 +630,17 @@ class GlobalSfM_Graph_Cleaner
   
   void clean_graph( const double & threshold ){
     IndexT source, target;
-    if(dbtalk){ std::cout << "Edges removed:"; }
+    if(dbtalk>0){ std::cout << "Edges removed:"; }
     
     std::set<Pair> removedPair;
      
     for(RelativeInfo_Map::const_iterator iter = relatives_Rt.begin(); iter != relatives_Rt.end(); ++iter) {
       source = iter->first.first;     target = iter->first.second;
-      if ( edge_consistency_map.get_coherence(iter->first) < threshold ){
-	if(dbtalk){ std::cout << " (" << iter->first.first << "," << iter->first.second << ")[" << edge_consistency_map.get_coherence(iter->first) << "]"; }
+      if ( edge_consistency_map.get_coherence(iter->first) <= threshold ){
+	if(dbtalk>0){ std::cout << " (" << iter->first.first << "," << iter->first.second << ")[" << edge_consistency_map.get_coherence(iter->first) << "]"; }
 	removedPair.insert(iter->first);
       }
+      else if(dbtalk>1){ std::cout << " <" << iter->first.first << "," << iter->first.second << ">[" << edge_consistency_map.get_coherence(iter->first) << "]"; }
     }
     for(std::set<Pair>::const_iterator iter = removedPair.begin(); iter != removedPair.end(); ++iter) {
       relatives_Rt.erase(*iter);
@@ -636,6 +649,82 @@ class GlobalSfM_Graph_Cleaner
       edge_consistency_map.erase(*iter);
     }
   }
+  
+  
+  
+  
+  void TripletRotationRejection(const double max_angular_error){
+    
+  // TRIPLETS
+  Pair_Set pairs;
+  for(RelativeInfo_Map::const_iterator iter = relatives_Rt.begin(); iter != relatives_Rt.end(); ++iter)
+    pairs.insert( iter->first );
+  std::vector< graph::Triplet > vec_triplets = graph::tripletListing(pairs);
+    
+  // Compute for each length 3 cycles: the composition error
+  // Error to identity rotation.
+  for (size_t i = 0; i < vec_triplets.size(); ++i)
+  {
+    const graph::Triplet & triplet = vec_triplets[i];
+    const IndexT I = triplet.i, J = triplet.j , K = triplet.k;
+
+    //-- Find the three rotations
+    const Pair ij(I,J);
+    const Pair ji(J,I);
+
+    Mat3 RIJ;
+    if (relatives_Rt.find(ij) != relatives_Rt.end())
+      RIJ = relatives_Rt.at(ij).first;
+    else
+      RIJ = relatives_Rt.at(ji).first.transpose();
+
+    const Pair jk(J,K);
+    const Pair kj(K,J);
+
+    Mat3 RJK;
+    if (relatives_Rt.find(jk) != relatives_Rt.end())
+      RJK = relatives_Rt.at(jk).first;
+    else
+      RJK = relatives_Rt.at(kj).first.transpose();
+
+    const Pair ki(K,I);
+    const Pair ik(I,K);
+
+    Mat3 RKI;
+    if (relatives_Rt.find(ki) != relatives_Rt.end())
+      RKI = relatives_Rt.at(ki).first;
+    else
+      RKI = relatives_Rt.at(ik).first.transpose();
+
+    const Mat3 Rot_To_Identity = RIJ * RJK * RKI; // motion composition
+    const float angularErrorDegree = static_cast<float>(R2D(getRotationMagnitude(Rot_To_Identity)));
+
+    if (angularErrorDegree < max_angular_error){
+      edge_consistency_map.update_coherence( ij, 1 );
+      edge_consistency_map.update_coherence( jk, 1 );
+      edge_consistency_map.update_coherence( ki, 1 );
+    }
+  }
+  
+}
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
   
   ////////// // // /  /    /       /          /       /    /  / // // //////////
 };

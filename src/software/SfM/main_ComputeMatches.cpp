@@ -379,7 +379,7 @@ int main(int argc, char **argv)
           const float ratio = putativeGeometricCount / (float)putativePhotometricCount;
           if (putativeGeometricCount < 50 || ratio < .3f)  {
             // the pair will be removed
-            vec_toRemove.push_back(iterMap->first);
+            vec_toRemove.push_back(iterMap->first); //            <-( OMGWTFBBQ )
           }
         }
         //-- remove discarded pairs
